@@ -1,0 +1,24 @@
+How to store current piles? (alist?)
+
+--------------------------------------------------------------------------------
+
+Cards are sorted from newest to oldest of clued,
+then newest to oldest of unclued.
+
+Cards can be: playable, useless, indispensable.
+
+--------------------------------------------------------------------------------
+
+Save clue = number, including oldest card, where it's *possible* it's
+indispensable and unplayable.
+
+
+
+--------------------------------------------------------------------------------
+
+citations:
+
+"How to make the perfect fireworks display: two strategies for Hanabi"
+
+Do some sort of alpha-beta pruning?
+  Would like to prefer not...can we detect finesses/bluffs/etc manually?

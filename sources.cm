@@ -1,0 +1,8 @@
+Library
+  structure Main
+  structure MTRand
+  structure Hanabi
+is
+  cmlib/cmlib.cm
+  src/main.sml
+  src/hanabi.sml
