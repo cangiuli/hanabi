@@ -1,6 +1,6 @@
 structure Main =
 struct
 
-  fun main () = print "Main!\n";
+  val _ = Hanabi.newGame ()
 
 end

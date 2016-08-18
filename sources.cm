@@ -2,7 +2,12 @@ Library
   structure Main
   structure MTRand
   structure Hanabi
+  structure Ansi
+  structure Random
 is
   cmlib/cmlib.cm
   src/main.sml
   src/hanabi.sml
+  src/ansi.sml
+  src/player.sig
+  src/random.sml
