@@ -4,15 +4,11 @@ Library
   structure Hanabi
   structure Ansi
   functor ListDict
-(*
   structure Random
-*)
 is
   cmlib/cmlib.cm
   src/main.sml
   src/hanabi.sml
   src/ansi.sml
-(*
   src/player.sig
   src/random.sml
-*)
