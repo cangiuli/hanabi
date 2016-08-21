@@ -14,8 +14,11 @@ struct
                 | IsRank of rank
                 | NotRank of rank
 
+  val ranks = [1,1,1,2,2,3,3,4,4,5]
+  val suits = [White,Yellow,Green,Blue,Red,Rainbow]
+
   (* SD :> DICT where key = suit {{{ *)
-  fun suitToInt s = case s of
+  fun suitToInt su = case su of
                          White => 0
                        | Yellow => 1
                        | Green => 2
@@ -26,13 +29,17 @@ struct
   structure Suit_Ord : ORDERED =
   struct
     type t = suit
-    fun eq (s,s') = (suitToInt s = suitToInt s')
-    fun compare (s,s') = Int.compare (suitToInt s, suitToInt s')
+    fun eq (su,su') = (suitToInt su = suitToInt su')
+    fun compare (su,su') = Int.compare (suitToInt su, suitToInt su')
   end
 
   structure SD = ListDict (structure Key = Suit_Ord)
   (* }}} *)
 
+  (* When a player receives the state, #hands contains all other players'
+   * cards with clues, while #clues contains their own clues only. In the
+   * gameplay loop, #hands contains all hands (first hand plays next), and
+   * #clues is empty. *)
   type state = {hints : int,
                 fuses : int,
                 clues : info list list,
@@ -42,7 +49,7 @@ struct
                 inPlay : rank SD.dict,
                 inDiscard : rank list SD.dict}
 
-  (* Boilerplate and printing {{{ *)
+  (* Boilerplate, printing, miscellaneous {{{ *)
   fun withHints (s : state) hints' : state =
     {hints = hints', fuses = #fuses s, clues = #clues s, hands = #hands s,
     turnsLeft = #turnsLeft s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard =
@@ -59,7 +66,7 @@ struct
     {hints = #hints s, fuses = #fuses s, clues = #clues s, hands = hands',
     turnsLeft = #turnsLeft s, inDeck = #inDeck s, inPlay = #inPlay s,
     inDiscard = #inDiscard s}
-  fun withOnTurns (s : state) turnsLeft' : state =
+  fun withTurnsLeft (s : state) turnsLeft' : state =
     {hints = #hints s, fuses = #fuses s, clues = #clues s, hands = #hands s,
     turnsLeft = turnsLeft', inDeck = #inDeck s, inPlay = #inPlay s,
     inDiscard = #inDiscard s}
@@ -76,7 +83,12 @@ struct
     turnsLeft = #turnsLeft s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard =
     inDiscard'}
 
-  fun suitColor s = case s of
+  fun withCurHand (s : state) hand : state =
+    case #hands s of
+         [] => raise Empty
+       | _::t => withHands s (hand :: t)
+
+  fun suitColor su = case su of
                          White => Ansi.bright_white
                        | Yellow => Ansi.bright_yellow
                        | Green => Ansi.bright_green
@@ -84,11 +96,11 @@ struct
                        | Red => Ansi.bright_red
                        | Rainbow => Ansi.dark_gray
 
-  fun cardToString (s,n) = Ansi.colorStr (Int.toString n) (suitColor s)
+  fun cardToString (su,r) = Ansi.colorStr (Int.toString r) (suitColor su)
 
   fun cardsToString (cs : card list) = String.concatWith " " (map cardToString cs)
 
-  fun suitToString s = case s of
+  fun suitToString su = case su of
                             White => "white"
                           | Yellow => "yellow"
                           | Green => "green"
@@ -97,16 +109,21 @@ struct
                           | Rainbow => "rainbow"
 
   fun infoToString i = case i of
-                            IsSuit s => suitToString s
-                          | NotSuit s => "not " ^ suitToString s
+                            IsSuit su => suitToString su
+                          | NotSuit su => "not " ^ suitToString su
                           | IsRank r => Int.toString r
                           | NotRank r => "not " ^ Int.toString r
 
-
   fun handToString (h : (card * info list) list) = String.concatWith "\n"
     (map (fn (c,is) => cardToString c ^ " (" ^
-          String.concatWith " " (map infoToString is) ^ ")")
+          String.concatWith "," (map infoToString is) ^ ")")
          h)
+
+  fun splitNth (xs : 'a list, n : int) : 'a * 'a list =
+    case (xs,n) of
+         ([],_) => raise Subscript
+       | (h::t,0) => (h,t)
+       | (h::t,n) => let val (elt,xs) = splitNth (t,n-1) in (elt, h :: xs) end
 
   (* }}} *)
 
@@ -126,36 +143,34 @@ struct
         shuffle (arr, max - 1)
       end
 
-  val ranks = [1,1,1,2,2,3,3,4,4,5]
-  val suits = [White,Yellow,Green,Blue,Red,Rainbow]
-
   (* for now, only supporting 6-suit Hanabi *)
   fun newDeck () : card list =
     let
-      fun makeSuit (s : suit) = map (fn x => (s,x)) ranks
+      fun makeSuit (su : suit) = map (fn x => (su,x)) ranks
       val deck = Array.fromList
         (List.concat (map makeSuit suits))
     in
       shuffle (deck, 59); Array.foldr (op ::) [] deck
     end
 
-  (* for now, only supporting 2-player Hanabi *)
-  fun newGameState () : state =
+  fun newGameState (numPlayers : int) : state =
   let
+    val size = if numPlayers = 2 orelse numPlayers = 3 then 5 else 4
     (* FIXME *)
+    fun makeHands (n : int, xs : 'a list) : 'a list list =
+      case n of
+           0 => []
+         | _ => List.take (xs,size) :: makeHands (n-1, List.drop (xs,size))
     val deck = newDeck ()
-    val firstHand = map (fn x => (x,[])) (List.take (deck,5))
-    val secondHand = map (fn x => (x,[])) (List.take (List.drop (deck,5), 5))
-    val deck' = List.drop (deck,10)
   in
     {hints = 8,
      fuses = 3,
      clues = [],
-     hands = [firstHand, secondHand],
+     hands = map (map (fn x => (x,[]))) (makeHands (numPlayers, deck)),
      turnsLeft = NONE,
-     inDeck = deck',
-     inPlay = foldl (fn (s,d) => SD.insert d s 0) SD.empty suits,
-     inDiscard = foldl (fn (s,d) => SD.insert d s []) SD.empty suits}
+     inDeck = List.drop (deck, numPlayers * size),
+     inPlay = foldl (fn (su,d) => SD.insert d su 0) SD.empty suits,
+     inDiscard = foldl (fn (su,d) => SD.insert d su []) SD.empty suits}
   end
 
   fun score (s : state) : int = foldl (op +) 0 (map (SD.lookup (#inPlay s)) suits)
@@ -163,16 +178,55 @@ struct
   fun isGameOver (s : state) : bool =
     (#fuses s = 0) orelse (#turnsLeft s = SOME 0) orelse (score s = 30)
 
-  (* FIXME also check Discard/Play for index, HintSuit/HintRank for player #,
-   * hintSuit for rainbow *)
-  fun illegalMove (a : action, s : state) =
-    (case a of HintSuit _ => true | HintRank _ => true | _ => false) andalso
-    (#hints s = 0)
+  (* If discarding/playing, card index must be in bounds. If hinting, player
+   * index must be in bounds, suit cannot be rainbow, and hints must be
+   * available. *)
+  fun illegalMove (a : action, s : state) : bool =
+    case a of
+         Discard i => (i < 0) orelse (i >= length (hd (#hands s)))
+       | Play i => (i < 0) orelse (i >= length (hd (#hands s)))
+       | HintSuit (i,su) => (i < 0) orelse (i >= length (#hands s) - 1) orelse
+                            (su = Rainbow) orelse (#hints s = 0)
+       | HintRank (i,r) => (i < 0) orelse (i >= length (#hands s) - 1) orelse
+                           (#hints s = 0)
+
+  (* First player draws a card if possible.
+   * Otherwise, start or decrement turn counter. *)
+  fun drawCard (s : state) : state =
+    case (#inDeck s,#turnsLeft s) of
+         ([], NONE) => withTurnsLeft s (SOME (length (#hands s)))
+       | ([], SOME n) => withTurnsLeft s (SOME (n-1))
+       | (c::cs, _) => withInDeck (withCurHand s ((c,[]) :: hd (#hands s))) cs
 
   (* TODO *)
-  fun enact (a : action, s : state) : state = s
+  (* Assume action is legal. Current player's hand is hd (#hands s). *)
+  fun enact (a : action, s : state) : state =
+    case a of
+         Discard i =>
+           let
+             val (((su,r),_),cs) = splitNth (hd (#hands s), i)
+           in
+             withInDiscard
+               (drawCard (withCurHand s cs))
+               (SD.insert (#inDiscard s) su (r :: SD.lookup (#inDiscard s) su))
+           end
+       | Play i =>
+           let
+             val (((su,r),_),cs) = splitNth (hd (#hands s), i)
+           in
+             if (SD.lookup (#inPlay s) su) + 1 = r
+             then withInPlay
+                    (drawCard (withCurHand s cs))
+                    (SD.insert (#inPlay s) su r)
+             else withInDiscard
+                    (drawCard (withCurHand (withFuses s ((#fuses s) - 1)) cs))
+                    (SD.insert (#inDiscard s) su (r::SD.lookup (#inDiscard s) su))
+           end
+       | HintSuit (i,su) => s
+       | HintRank (i,r) => s
 
-  (* TODO *)
+  (* TODO. call illegalMove and enact; hand management stuff. Check for
+   * end-of-game after enacting turn. *)
   fun gameLoop (s : state) : state = s
 
   fun printState (s : state) = (print
@@ -181,11 +235,11 @@ struct
      "Deck: " ^ Int.toString (length (#inDeck s)) ^ "\n" ^
      (* "(Player has " ^ Int.toString (length (#clues s)) ^ " clues)\n" ^ *)
      "Play: " ^
-     (cardsToString (map (fn suit => (suit,SD.lookup (#inPlay s) suit)) suits)) ^
+     (cardsToString (map (fn su => (su,SD.lookup (#inPlay s) su)) suits)) ^
      " (Score: " ^ Int.toString (score s) ^ ")\n" ^
      "Discard: " ^
      (cardsToString (List.concat (map
-       (fn suit => map (fn r => (suit,r)) (SD.lookup (#inDiscard s) suit))
+       (fn su => map (fn r => (su,r)) (SD.lookup (#inDiscard s) su))
        suits))) ^ "\n" ^
      "Hands:\n" ^ (String.concatWith "\n\n" (map handToString (#hands s))) ^ "\n" ^
      (case #turnsLeft s of
@@ -195,10 +249,10 @@ struct
   (* TODO *)
   fun newGame () =
   let
-    val newState = newGameState ()
-    val [hand,hand'] = #hands newState
+    val newState = newGameState 5
   in
-    printState newState
+    printState newState;
+    printState (enact (Play 0, newState))
   end
 
 end
