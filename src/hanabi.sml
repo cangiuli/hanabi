@@ -110,9 +110,9 @@ struct
 
   fun infoToString i = case i of
                             IsSuit su => suitToString su
-                          | NotSuit su => "not " ^ suitToString su
+                          | NotSuit su => "!" ^ suitToString su
                           | IsRank r => Int.toString r
-                          | NotRank r => "not " ^ Int.toString r
+                          | NotRank r => "!" ^ Int.toString r
 
   fun handToString (h : (card * info list) list) = String.concatWith "\n"
     (map (fn (c,is) => cardToString c ^ " (" ^
@@ -124,6 +124,13 @@ struct
          ([],_) => raise Subscript
        | (h::t,0) => (h,t)
        | (h::t,n) => let val (elt,xs) = splitNth (t,n-1) in (elt, h :: xs) end
+
+  (* splitAt (xs,n) = (List.take (xs,n), List.drop (xs,n)) *)
+  fun splitAt (xs : 'a list, n : int) : 'a list * 'a list =
+    case (xs,n) of
+         (_,0) => ([],xs)
+       | ([],_) => raise Subscript
+       | (h::t,n) => let val (take,drop) = splitAt (t,n-1) in (h::take, drop) end
 
   (* }}} *)
 
@@ -198,8 +205,7 @@ struct
        | ([], SOME n) => withTurnsLeft s (SOME (n-1))
        | (c::cs, _) => withInDeck (withCurHand s ((c,[]) :: hd (#hands s))) cs
 
-  (* TODO *)
-  (* Assume action is legal. Current player's hand is hd (#hands s). *)
+  (* Current player advances the game state by an (assumed legal) action. *)
   fun enact (a : action, s : state) : state =
     case a of
          Discard i =>
@@ -219,11 +225,28 @@ struct
                     (drawCard (withCurHand s cs))
                     (SD.insert (#inPlay s) su r)
              else withInDiscard
-                    (drawCard (withCurHand (withFuses s ((#fuses s) - 1)) cs))
+                    (drawCard (withCurHand (withFuses s (#fuses s - 1)) cs))
                     (SD.insert (#inDiscard s) su (r::SD.lookup (#inDiscard s) su))
            end
-       | HintSuit (i,su) => s
-       | HintRank (i,r) => s
+       | HintSuit (i,su) =>
+           let
+             val (prev,ith::next) = splitAt (#hands s, i+1)
+             fun info (su',r) =
+               if su = su' orelse su' = Rainbow then IsSuit su else NotSuit su
+           in
+             withHands
+               (withHints s (#hints s - 1))
+               (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next)
+           end
+       | HintRank (i,r) =>
+           let
+             val (prev,ith::next) = splitAt (#hands s, i+1)
+             fun info (su,r') = if r = r' then IsRank r else NotRank r
+           in
+             withHands
+               (withHints s (#hints s - 1))
+               (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next)
+           end
 
   (* TODO. call illegalMove and enact; hand management stuff. Check for
    * end-of-game after enacting turn. *)
@@ -252,7 +275,7 @@ struct
     val newState = newGameState 5
   in
     printState newState;
-    printState (enact (Play 0, newState))
+    printState (enact (HintSuit (3,Red), newState))
   end
 
 end
