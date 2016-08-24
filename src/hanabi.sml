@@ -182,7 +182,7 @@ struct
 
   fun score (s : state) : int = foldl (op +) 0 (map (SD.lookup (#inPlay s)) suits)
 
-  fun isGameOver (s : state) : bool =
+  fun gameOver (s : state) : bool =
     (#fuses s = 0) orelse (#turnsLeft s = SOME 0) orelse (score s = 30)
 
   (* If discarding/playing, card index must be in bounds. If hinting, player
@@ -250,7 +250,23 @@ struct
 
   (* TODO. call illegalMove and enact; hand management stuff. Check for
    * end-of-game after enacting turn. *)
-  fun gameLoop (s : state) : state = s
+  (* TODO print action as well *)
+  fun gameLoop (s : state)
+               (ps : (state -> action) list)
+               (trace : state -> unit)
+               : state =
+    let
+      fun rotate xs = (tl xs) @ [hd xs]
+      val hand::rest = #hands s
+      val act = hd ps (withHands (withClues (withInDeck s []) (map #2 hand)) rest)
+      val _ = if illegalMove (act,s) then raise Fail "illegal action" else ()
+      val s' = enact (act,s)
+      val _ = trace s'
+    in
+      if gameOver s'
+      then s'
+      else gameLoop (withHands s' (rotate (#hands s'))) (rotate ps) trace
+    end
 
   fun printState (s : state) = (print
     ("Hints: " ^ Int.toString (#hints s) ^ " " ^
@@ -272,10 +288,14 @@ struct
   (* TODO *)
   fun newGame () =
   let
-    val newState = newGameState 5
+    val newState = newGameState 2
   in
-    printState newState;
-    printState (enact (HintSuit (3,Red), newState))
+    (*
+    gameLoop
+      newState
+      [fn x => HintRank (0,1), fn x => HintSuit (0,Red)] printState
+    *)
+    printState (enact ((HintRank (0,1)),newState))
   end
 
 end

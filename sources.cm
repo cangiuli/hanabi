@@ -1,9 +1,6 @@
 Library
   structure Main
-  structure MTRand
   structure Hanabi
-  structure Ansi
-  functor ListDict
   structure Random
 is
   cmlib/cmlib.cm
