@@ -36,6 +36,8 @@ struct
   structure SD = ListDict (structure Key = Suit_Ord)
   (* }}} *)
 
+  (* FIXME include a log of actions *)
+
   (* When a player receives the state, #hands contains all other players'
    * cards with clues, while #clues contains their own clues only. In the
    * gameplay loop, #hands contains all hands (first hand plays next), and
@@ -114,6 +116,13 @@ struct
                           | IsRank r => Int.toString r
                           | NotRank r => "!" ^ Int.toString r
 
+  fun actionToString (a : action) =
+    case a of
+         Discard i => "Discard " ^ Int.toString i
+       | Play i => "Play " ^ Int.toString i
+       | HintSuit (i,su) => "Hint " ^ suitToString su ^ " to p" ^ Int.toString i
+       | HintRank (i,r) => "Hint " ^ Int.toString r ^ " to p" ^ Int.toString i
+
   fun handToString (h : (card * info list) list) = String.concatWith "\n"
     (map (fn (c,is) => cardToString c ^ " (" ^
           String.concatWith "," (map infoToString is) ^ ")")
@@ -163,19 +172,22 @@ struct
   fun newGameState (numPlayers : int) : state =
   let
     val size = if numPlayers = 2 orelse numPlayers = 3 then 5 else 4
-    (* FIXME *)
-    fun makeHands (n : int, xs : 'a list) : 'a list list =
-      case n of
-           0 => []
-         | _ => List.take (xs,size) :: makeHands (n-1, List.drop (xs,size))
-    val deck = newDeck ()
+    fun makeHands (n : int, xs : 'a list) : 'a list list * 'a list =
+      if n = 0 then ([],xs) else
+        let
+          val (hand,rest) = splitAt (xs, size)
+          val (hands,deck) = makeHands (n-1, rest)
+        in
+          (hand::hands, deck)
+        end
+    val (hands,deck) = makeHands (numPlayers, newDeck ())
   in
     {hints = 8,
      fuses = 3,
      clues = [],
-     hands = map (map (fn x => (x,[]))) (makeHands (numPlayers, deck)),
+     hands = map (map (fn x => (x,[]))) hands,
      turnsLeft = NONE,
-     inDeck = List.drop (deck, numPlayers * size),
+     inDeck = deck,
      inPlay = foldl (fn (su,d) => SD.insert d su 0) SD.empty suits,
      inDiscard = foldl (fn (su,d) => SD.insert d su []) SD.empty suits}
   end
@@ -248,22 +260,22 @@ struct
                (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next)
            end
 
-  (* TODO. call illegalMove and enact; hand management stuff. Check for
-   * end-of-game after enacting turn. *)
-  (* TODO print action as well *)
+  (* Runs a game from state s with a list of players ps.
+   * Calls trace after each move, and returns final game state.
+   * Requires length (#hands s) = length ps. *)
   fun gameLoop (s : state)
                (ps : (state -> action) list)
-               (trace : state -> unit)
+               (trace : action * state -> unit)
                : state =
     let
       fun rotate xs = (tl xs) @ [hd xs]
       val hand::rest = #hands s
       val act = hd ps (withHands (withClues (withInDeck s []) (map #2 hand)) rest)
-      val _ = if illegalMove (act,s) then raise Fail "illegal action" else ()
-      val s' = enact (act,s)
-      val _ = trace s'
+      val s' = if illegalMove (act,s)
+               then raise Fail ("Illegal action: " ^ actionToString act ^ "\n")
+               else enact (act,s)
     in
-      if gameOver s'
+      if (trace (act,s'); gameOver s')
       then s'
       else gameLoop (withHands s' (rotate (#hands s'))) (rotate ps) trace
     end
@@ -285,17 +297,15 @@ struct
            NONE => ""
          | SOME n => (Int.toString n) ^ " turns remain.\n")))
 
-  (* TODO *)
-  fun newGame () =
+  (* Play a game of Hanabi between players ps. *)
+  fun newGame (ps : (state -> action) list) : int =
   let
-    val newState = newGameState 2
+    val s = if length ps < 2 orelse length ps > 5
+            then raise Fail "Invalid number of players."
+            else newGameState (length ps)
+    fun trace (a,s) = (print (actionToString a ^ "\n"); printState s; print "\n")
   in
-    (*
-    gameLoop
-      newState
-      [fn x => HintRank (0,1), fn x => HintSuit (0,Red)] printState
-    *)
-    printState (enact ((HintRank (0,1)),newState))
+    printState s; print "\n"; score (gameLoop s ps trace)
   end
 
 end

@@ -1,11 +1,11 @@
 Library
   structure Main
   structure Hanabi
-  structure Random
+  structure NaivePlayer
 is
   cmlib/cmlib.cm
   src/main.sml
   src/hanabi.sml
   src/ansi.sml
   src/player.sig
-  src/random.sml
+  src/naive.sml
