@@ -1,10 +1,13 @@
 Library
   structure Main
+  signature HANABI
   structure Hanabi
+  signature PLAYER
   structure NaivePlayer
 is
   cmlib/cmlib.cm
   src/main.sml
+  src/hanabi.sig
   src/hanabi.sml
   src/ansi.sml
   src/player.sig

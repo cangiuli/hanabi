@@ -1,4 +1,4 @@
-structure Hanabi =
+structure Hanabi :> HANABI =
 struct
 
   datatype suit = White | Yellow | Green | Blue | Red | Rainbow
