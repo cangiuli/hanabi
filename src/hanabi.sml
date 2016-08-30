@@ -13,6 +13,12 @@ struct
                 | NotSuit of suit
                 | IsRank of rank
                 | NotRank of rank
+  datatype player = Me | Other of int
+  datatype play = Discarded of card
+                | Played of card
+                | HintedSuit of player * suit * card list
+                | HintedRank of player * rank * card list
+  datatype turns = Deck of int | Turns of int (* deck size or turns remaining *)
 
   val ranks = [1,1,1,2,2,3,3,4,4,5]
   val suits = [White,Yellow,Green,Blue,Red,Rainbow]
@@ -36,56 +42,54 @@ struct
   structure SD = ListDict (structure Key = Suit_Ord)
   (* }}} *)
 
-  (* FIXME include a log of actions *)
+  (* Full game state. #hands contains all hands; first hand plays next. *)
+  type fstate = {hints : int,
+                 fuses : int,
+                 hands : (card * info list) list list,
+                 log : play list,
+                 turns : turns,
+                 inDeck : card list,
+                 inPlay : rank SD.dict,
+                 inDiscard : rank list SD.dict}
 
-  (* When a player receives the state, #hands contains all other players'
-   * cards with clues, while #clues contains their own clues only. In the
-   * gameplay loop, #hands contains all hands (first hand plays next), and
-   * #clues is empty. *)
+  (* Player-visible state. #hands contains all other players' cards; #clues
+   * contains current player's clues; #log returns list of last n plays. *)
   type state = {hints : int,
                 fuses : int,
                 clues : info list list,
                 hands : (card * info list) list list,
-                turnsLeft : int option,
-                inDeck : card list,
+                log : int -> (player * play) list,
+                turns : turns,
                 inPlay : rank SD.dict,
                 inDiscard : rank list SD.dict}
 
   (* Boilerplate, printing, miscellaneous {{{ *)
-  fun withHints (s : state) hints' : state =
-    {hints = hints', fuses = #fuses s, clues = #clues s, hands = #hands s,
-    turnsLeft = #turnsLeft s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard =
-    #inDiscard s}
-  fun withFuses (s : state) fuses' : state =
-    {hints = #hints s, fuses = fuses', clues = #clues s, hands = #hands s,
-    turnsLeft = #turnsLeft s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard =
-    #inDiscard s}
-  fun withClues (s : state) clues' : state =
-    {hints = #hints s, fuses = #fuses s, clues = clues', hands = #hands s,
-    turnsLeft = #turnsLeft s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard =
-    #inDiscard s}
-  fun withHands (s : state) hands' : state =
-    {hints = #hints s, fuses = #fuses s, clues = #clues s, hands = hands',
-    turnsLeft = #turnsLeft s, inDeck = #inDeck s, inPlay = #inPlay s,
-    inDiscard = #inDiscard s}
-  fun withTurnsLeft (s : state) turnsLeft' : state =
-    {hints = #hints s, fuses = #fuses s, clues = #clues s, hands = #hands s,
-    turnsLeft = turnsLeft', inDeck = #inDeck s, inPlay = #inPlay s,
-    inDiscard = #inDiscard s}
-  fun withInDeck (s : state) inDeck' : state =
-    {hints = #hints s, fuses = #fuses s, clues = #clues s, hands = #hands s,
-    turnsLeft = #turnsLeft s, inDeck = inDeck', inPlay = #inPlay s, inDiscard =
-    #inDiscard s}
-  fun withInPlay (s : state) inPlay' : state =
-    {hints = #hints s, fuses = #fuses s, clues = #clues s, hands = #hands s,
-    turnsLeft = #turnsLeft s, inDeck = #inDeck s, inPlay = inPlay', inDiscard =
-    #inDiscard s}
-  fun withInDiscard (s : state) inDiscard' : state =
-    {hints = #hints s, fuses = #fuses s, clues = #clues s, hands = #hands s,
-    turnsLeft = #turnsLeft s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard =
-    inDiscard'}
+  fun withHints (s : fstate) hints' : fstate =
+    {hints = hints', fuses = #fuses s, hands = #hands s, log = #log s, turns =
+    #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+  fun withFuses (s : fstate) fuses' : fstate =
+    {hints = #hints s, fuses = fuses', hands = #hands s, log = #log s, turns =
+    #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+  fun withHands (s : fstate) hands' : fstate =
+    {hints = #hints s, fuses = #fuses s, hands = hands', log = #log s, turns =
+    #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+  fun withLog (s : fstate) log' : fstate =
+    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = log', turns =
+    #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+  fun withTurns (s : fstate) turns' : fstate =
+    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns =
+    turns', inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+  fun withInDeck (s : fstate) inDeck' : fstate =
+    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns =
+    #turns s, inDeck = inDeck', inPlay = #inPlay s, inDiscard = #inDiscard s}
+  fun withInPlay (s : fstate) inPlay' : fstate =
+    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns =
+    #turns s, inDeck = #inDeck s, inPlay = inPlay', inDiscard = #inDiscard s}
+  fun withInDiscard (s : fstate) inDiscard' : fstate =
+    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns =
+    #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = inDiscard'}
 
-  fun withCurHand (s : state) hand : state =
+  fun withCurHand (s : fstate) hand : fstate =
     case #hands s of
          [] => raise Empty
        | _::t => withHands s (hand :: t)
@@ -169,7 +173,7 @@ struct
       shuffle (deck, 59); Array.foldr (op ::) [] deck
     end
 
-  fun newGameState (numPlayers : int) : state =
+  fun newGameState (numPlayers : int) : fstate =
   let
     val size = if numPlayers = 2 orelse numPlayers = 3 then 5 else 4
     fun makeHands (n : int, xs : 'a list) : 'a list list * 'a list =
@@ -184,23 +188,23 @@ struct
   in
     {hints = 8,
      fuses = 3,
-     clues = [],
      hands = map (map (fn x => (x,[]))) hands,
-     turnsLeft = NONE,
+     log = [],
+     turns = Deck (60 - numPlayers * size),
      inDeck = deck,
      inPlay = foldl (fn (su,d) => SD.insert d su 0) SD.empty suits,
      inDiscard = foldl (fn (su,d) => SD.insert d su []) SD.empty suits}
   end
 
-  fun score (s : state) : int = foldl (op +) 0 (map (SD.lookup (#inPlay s)) suits)
+  fun score (s : fstate) : int = foldl (op +) 0 (map (SD.lookup (#inPlay s)) suits)
 
-  fun gameOver (s : state) : bool =
-    (#fuses s = 0) orelse (#turnsLeft s = SOME 0) orelse (score s = 30)
+  fun gameOver (s : fstate) : bool =
+    (#fuses s = 0) orelse (#turns s = Turns 0) orelse (score s = 30)
 
   (* If discarding/playing, card index must be in bounds. If hinting, player
    * index must be in bounds, suit cannot be rainbow, and hints must be
    * available. *)
-  fun illegalMove (a : action, s : state) : bool =
+  fun illegalMove (a : action, s : fstate) : bool =
     case a of
          Discard i => (i < 0) orelse (i >= length (hd (#hands s)))
        | Play i => (i < 0) orelse (i >= length (hd (#hands s)))
@@ -211,14 +215,17 @@ struct
 
   (* First player draws a card if possible.
    * Otherwise, start or decrement turn counter. *)
-  fun drawCard (s : state) : state =
-    case (#inDeck s,#turnsLeft s) of
-         ([], NONE) => withTurnsLeft s (SOME (length (#hands s)))
-       | ([], SOME n) => withTurnsLeft s (SOME (n-1))
-       | (c::cs, _) => withInDeck (withCurHand s ((c,[]) :: hd (#hands s))) cs
+  fun drawCard (s : fstate) : fstate =
+    case (#inDeck s,#turns s) of
+         ([], Deck _) => withTurns s (Turns (length (#hands s)))
+       | ([], Turns n) => withTurns s (Turns (n-1))
+       | (c::cs, Deck n) => withTurns (withInDeck
+           (withCurHand s ((c,[]) :: hd (#hands s))) cs) (Deck (n-1))
+       | _ => raise Fail "Illegal game state."
 
+  (* FIXME maintain the log *)
   (* Current player advances the game state by an (assumed legal) action. *)
-  fun enact (a : action, s : state) : state =
+  fun enact (a : action, s : fstate) : fstate =
     case a of
          Discard i =>
            let
@@ -263,14 +270,21 @@ struct
   (* Runs a game from state s with a list of players ps.
    * Calls trace after each move, and returns final game state.
    * Requires length (#hands s) = length ps. *)
-  fun gameLoop (s : state)
+  fun gameLoop (s : fstate)
                (ps : (state -> action) list)
-               (trace : action * state -> unit)
-               : state =
+               (trace : action * fstate -> unit)
+               : fstate =
     let
       fun rotate xs = (tl xs) @ [hd xs]
-      val hand::rest = #hands s
-      val act = hd ps (withHands (withClues (withInDeck s []) (map #2 hand)) rest)
+      val act = hd ps
+        {hints = #hints s,
+         fuses = #fuses s,
+         clues = map #2 (hd (#hands s)),
+         hands = tl (#hands s),
+         log = (fn _ => []), (* FIXME *)
+         turns = #turns s,
+         inPlay = #inPlay s,
+         inDiscard = #inDiscard s}
       val s' = if illegalMove (act,s)
                then raise Fail ("Illegal action: " ^ actionToString act ^ "\n")
                else enact (act,s)
@@ -280,11 +294,12 @@ struct
       else gameLoop (withHands s' (rotate (#hands s'))) (rotate ps) trace
     end
 
-  fun printState (s : state) = (print
+  fun printState (s : fstate) = (print
     ("Hints: " ^ Int.toString (#hints s) ^ " " ^
      "Fuses: " ^ Int.toString (#fuses s) ^ " " ^
-     "Deck: " ^ Int.toString (length (#inDeck s)) ^ "\n" ^
-     (* "(Player has " ^ Int.toString (length (#clues s)) ^ " clues)\n" ^ *)
+     (case #turns s of
+           Deck n => "Deck: " ^ (Int.toString n)
+         | Turns n => (Int.toString n) ^ " turns remain.") ^ "\n" ^
      "Play: " ^
      (cardsToString (map (fn su => (su,SD.lookup (#inPlay s) su)) suits)) ^
      " (Score: " ^ Int.toString (score s) ^ ")\n" ^
@@ -292,10 +307,7 @@ struct
      (cardsToString (List.concat (map
        (fn su => map (fn r => (su,r)) (SD.lookup (#inDiscard s) su))
        suits))) ^ "\n" ^
-     "Hands:\n" ^ (String.concatWith "\n\n" (map handToString (#hands s))) ^ "\n" ^
-     (case #turnsLeft s of
-           NONE => ""
-         | SOME n => (Int.toString n) ^ " turns remain.\n")))
+     "Hands:\n" ^ (String.concatWith "\n\n" (map handToString (#hands s))) ^ "\n"))
 
   (* Play a game of Hanabi between players ps. *)
   fun newGame (ps : (state -> action) list) : int =

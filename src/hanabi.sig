@@ -13,21 +13,26 @@ sig
                 | NotSuit of suit
                 | IsRank of rank
                 | NotRank of rank
+  datatype player = Me | Other of int
+  datatype play = Discarded of card
+                | Played of card
+                | HintedSuit of player * suit * card list
+                | HintedRank of player * rank * card list
+  datatype turns = Deck of int | Turns of int (* deck size or turns remaining *)
 
   structure SD : DICT where type key = suit
 
-  (* When a player receives the state, #hands contains all other players'
-   * cards with clues, while #clues contains their own clues only. *)
   type state = {hints : int,
                 fuses : int,
                 clues : info list list,
                 hands : (card * info list) list list,
-                turnsLeft : int option,
-                inDeck : card list,
+                log : int -> (player * play) list,
+                turns : turns,
                 inPlay : rank SD.dict,
                 inDiscard : rank list SD.dict}
 
-  val score : state -> int
+  (* TODO HanabiUtils should provide score : state -> int *)
+  (* TODO HanabiUtils should provide lastRound : (player * play) list *)
 
   val newGame : (state -> action) list -> int
 
