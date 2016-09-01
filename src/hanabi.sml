@@ -89,6 +89,8 @@ struct
     {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns =
     #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = inDiscard'}
 
+  fun withLogCons (s : fstate) play : fstate = withLog s (play :: #log s)
+
   fun withCurHand (s : fstate) hand : fstate =
     case #hands s of
          [] => raise Empty
@@ -119,6 +121,23 @@ struct
                           | NotSuit su => "!" ^ suitToString su
                           | IsRank r => Int.toString r
                           | NotRank r => "!" ^ Int.toString r
+
+  fun playerToString player =
+    case player of
+         Me => "me"
+       | Other i => "p" ^ Int.toString i
+
+  fun logToString (player,play) =
+    (case player of
+          Me => "I"
+        | Other i => "p" ^ Int.toString i) ^
+    (case play of
+          Discarded c => " discarded " ^ cardToString c
+        | Played c => " played " ^ cardToString c
+        | HintedSuit (p,su,cs) => " hinted " ^ suitToString su ^
+            " (" ^ cardsToString cs ^ ") to " ^ playerToString p
+        | HintedRank (p,r,cs) => " hinted " ^ Int.toString r ^
+            " (" ^ cardsToString cs ^ ") to " ^ playerToString p)
 
   fun actionToString (a : action) =
     case a of
@@ -206,7 +225,8 @@ struct
    * available. *)
   fun illegalMove (a : action, s : fstate) : bool =
     case a of
-         Discard i => (i < 0) orelse (i >= length (hd (#hands s)))
+         Discard i => (i < 0) orelse (i >= length (hd (#hands s))) orelse
+                      (#hints s = 8)
        | Play i => (i < 0) orelse (i >= length (hd (#hands s)))
        | HintSuit (i,su) => (i < 0) orelse (i >= length (#hands s) - 1) orelse
                             (su = Rainbow) orelse (#hints s = 0)
@@ -223,7 +243,7 @@ struct
            (withCurHand s ((c,[]) :: hd (#hands s))) cs) (Deck (n-1))
        | _ => raise Fail "Illegal game state."
 
-  (* FIXME maintain the log *)
+  (* FIXME do something better than chaining so many update functions *)
   (* Current player advances the game state by an (assumed legal) action. *)
   fun enact (a : action, s : fstate) : fstate =
     case a of
@@ -232,7 +252,8 @@ struct
              val (((su,r),_),cs) = splitNth (hd (#hands s), i)
            in
              withInDiscard
-               (drawCard (withCurHand s cs))
+               (drawCard (withCurHand (withLogCons
+                 (withHints s (#hints s + 1)) (Discarded (su,r))) cs))
                (SD.insert (#inDiscard s) su (r :: SD.lookup (#inDiscard s) su))
            end
        | Play i =>
@@ -241,31 +262,57 @@ struct
            in
              if (SD.lookup (#inPlay s) su) + 1 = r
              then withInPlay
-                    (drawCard (withCurHand s cs))
+                    (drawCard (withCurHand (withLogCons
+                      (withHints s (if r = 5 then (Int.min (#hints s + 1,8)) else #hints s))
+                      (Played (su,r))) cs))
                     (SD.insert (#inPlay s) su r)
              else withInDiscard
-                    (drawCard (withCurHand (withFuses s (#fuses s - 1)) cs))
+                    (drawCard (withCurHand
+                      (withFuses (withLogCons s (Played (su,r))) (#fuses s - 1)) cs))
                     (SD.insert (#inDiscard s) su (r::SD.lookup (#inDiscard s) su))
            end
        | HintSuit (i,su) =>
            let
              val (prev,ith::next) = splitAt (#hands s, i+1)
-             fun info (su',r) =
-               if su = su' orelse su' = Rainbow then IsSuit su else NotSuit su
+             fun hinted (su',r) = su = su' orelse su' = Rainbow
+             fun info c = if hinted c then IsSuit su else NotSuit su
+             val newLog = HintedSuit (Other i,su,List.filter hinted (List.map #1 ith))
            in
              withHands
-               (withHints s (#hints s - 1))
+               (withHints (withLogCons s newLog) (#hints s - 1))
                (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next)
            end
        | HintRank (i,r) =>
            let
              val (prev,ith::next) = splitAt (#hands s, i+1)
              fun info (su,r') = if r = r' then IsRank r else NotRank r
+             val newLog = HintedRank (Other i,r,
+               List.filter (fn (su,r') => r = r') (List.map #1 ith))
            in
              withHands
-               (withHints s (#hints s - 1))
+               (withHints (withLogCons s newLog) (#hints s - 1))
                (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next)
            end
+
+  (* Returns the first n elements of the game log, adjusting player numbers
+   * appropriately. The player only accesses (#log s) through this. *)
+  fun getLog (ps : play list) (players : int) (n : int) : (player * play) list =
+    let
+      fun who i = if i mod players = 0 then Me else Other (~i mod players - 1)
+      fun rotate p i =
+        case p of
+             Discarded c => (who i, Discarded c)
+           | Played c => (who i, Played c)
+           | HintedSuit (Other pl,su,cs) => (who i, HintedSuit (who (i-pl-1),su,cs))
+           | HintedRank (Other pl,r,cs) => (who i, HintedRank (who (i-pl-1),r,cs))
+           | _ => raise Fail "Impossible log."
+      fun loop xs i = if i > n then [] else
+        case xs of
+             [] => []
+           | x::xs' => rotate x i :: loop xs' (i+1)
+    in
+      loop ps 1
+    end
 
   (* Runs a game from state s with a list of players ps.
    * Calls trace after each move, and returns final game state.
@@ -281,7 +328,7 @@ struct
          fuses = #fuses s,
          clues = map #2 (hd (#hands s)),
          hands = tl (#hands s),
-         log = (fn _ => []), (* FIXME *)
+         log = getLog (#log s) (length ps),
          turns = #turns s,
          inPlay = #inPlay s,
          inDiscard = #inDiscard s}
