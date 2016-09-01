@@ -31,9 +31,6 @@ sig
                 inPlay : rank SD.dict,
                 inDiscard : rank list SD.dict}
 
-  (* TODO HanabiUtils should provide score : state -> int *)
-  (* TODO HanabiUtils should provide lastRound : (player * play) list *)
-
   val newGame : (state -> action) list -> int
 
 end
