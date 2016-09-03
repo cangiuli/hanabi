@@ -151,6 +151,7 @@ struct
           String.concatWith "," (map infoToString is) ^ ")")
          h)
 
+  (* splitNth (xs,n) = (List.nth(xs,n), List.take (xs,n) @ List.drop (xs,n+1)) *)
   fun splitNth (xs : 'a list, n : int) : 'a * 'a list =
     case (xs,n) of
          ([],_) => raise Subscript
@@ -303,8 +304,14 @@ struct
         case p of
              Discarded c => (who i, Discarded c)
            | Played c => (who i, Played c)
-           | HintedSuit (Other pl,su,cs) => (who i, HintedSuit (who (i-pl-1),su,cs))
-           | HintedRank (Other pl,r,cs) => (who i, HintedRank (who (i-pl-1),r,cs))
+           | HintedSuit (Other pl,su,cs) =>
+               (case who (i-pl-1) of
+                     Me => (who i, HintedSuit (Me,su,[]))
+                   | Other j => (who i, HintedSuit (Other j,su,cs)))
+           | HintedRank (Other pl,r,cs) =>
+               (case who (i-pl-1) of
+                     Me => (who i, HintedRank (Me,r,[]))
+                   | Other j => (who i, HintedRank (Other j,r,cs)))
            | _ => raise Fail "Impossible log."
       fun loop xs i = if i > n then [] else
         case xs of

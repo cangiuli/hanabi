@@ -3,7 +3,7 @@ Library
   signature HANABI
   structure Hanabi
   signature PLAYER
-  structure NaivePlayer
+  structure SimplePlayer
 is
   cmlib/cmlib.cm
   src/main.sml
@@ -11,4 +11,4 @@ is
   src/hanabi.sml
   src/ansi.sml
   src/player.sig
-  src/naive.sml
+  src/simple.sml

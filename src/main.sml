@@ -1,6 +1,6 @@
 structure Main =
 struct
 
-  val _ = Hanabi.newGame [NaivePlayer.play,NaivePlayer.play,NaivePlayer.play]
+  val _ = Hanabi.newGame [SimplePlayer.play,SimplePlayer.play,SimplePlayer.play]
 
 end
