@@ -22,6 +22,7 @@ sig
 
   structure SD : DICT where type key = suit
 
+  (* New cards and new info are always prepended. *)
   type state = {hints : int,
                 fuses : int,
                 clues : info list list,
