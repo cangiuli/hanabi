@@ -63,7 +63,7 @@ struct
                 inPlay : rank SD.dict,
                 inDiscard : rank list SD.dict}
 
-  (* Boilerplate, printing, miscellaneous {{{ *)
+  (* Boilerplate, printing {{{ *)
   fun withHints (s : fstate) hints' : fstate =
     {hints = hints', fuses = #fuses s, hands = #hands s, log = #log s, turns =
     #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
@@ -151,20 +151,6 @@ struct
           String.concatWith "," (map infoToString is) ^ ")")
          h)
 
-  (* splitNth (xs,n) = (List.nth(xs,n), List.take (xs,n) @ List.drop (xs,n+1)) *)
-  fun splitNth (xs : 'a list, n : int) : 'a * 'a list =
-    case (xs,n) of
-         ([],_) => raise Subscript
-       | (h::t,0) => (h,t)
-       | (h::t,n) => let val (elt,xs) = splitNth (t,n-1) in (elt, h :: xs) end
-
-  (* splitAt (xs,n) = (List.take (xs,n), List.drop (xs,n)) *)
-  fun splitAt (xs : 'a list, n : int) : 'a list * 'a list =
-    case (xs,n) of
-         (_,0) => ([],xs)
-       | ([],_) => raise Subscript
-       | (h::t,n) => let val (take,drop) = splitAt (t,n-1) in (h::take, drop) end
-
   (* }}} *)
 
   (* shuffle (arr,n) reorders the first n elements of arr
@@ -199,7 +185,7 @@ struct
     fun makeHands (n : int, xs : 'a list) : 'a list list * 'a list =
       if n = 0 then ([],xs) else
         let
-          val (hand,rest) = splitAt (xs, size)
+          val (hand,rest) = Util.splitAt (xs, size)
           val (hands,deck) = makeHands (n-1, rest)
         in
           (hand::hands, deck)
@@ -250,7 +236,7 @@ struct
     case a of
          Discard i =>
            let
-             val (((su,r),_),cs) = splitNth (hd (#hands s), i)
+             val (((su,r),_),cs) = Util.splitNth (hd (#hands s), i)
            in
              withInDiscard
                (drawCard (withCurHand (withLogCons
@@ -259,7 +245,7 @@ struct
            end
        | Play i =>
            let
-             val (((su,r),_),cs) = splitNth (hd (#hands s), i)
+             val (((su,r),_),cs) = Util.splitNth (hd (#hands s), i)
            in
              if (SD.lookup (#inPlay s) su) + 1 = r
              then withInPlay
@@ -274,7 +260,7 @@ struct
            end
        | HintSuit (i,su) =>
            let
-             val (prev,ith::next) = splitAt (#hands s, i+1)
+             val (prev,ith::next) = Util.splitAt (#hands s, i+1)
              fun hinted (su',r) = su = su' orelse su' = Rainbow
              fun info c = if hinted c then IsSuit su else NotSuit su
              val newLog = HintedSuit (Other i,su,List.filter hinted (List.map #1 ith))
@@ -285,7 +271,7 @@ struct
            end
        | HintRank (i,r) =>
            let
-             val (prev,ith::next) = splitAt (#hands s, i+1)
+             val (prev,ith::next) = Util.splitAt (#hands s, i+1)
              fun info (su,r') = if r = r' then IsRank r else NotRank r
              val newLog = HintedRank (Other i,r,
                List.filter (fn (su,r') => r = r') (List.map #1 ith))

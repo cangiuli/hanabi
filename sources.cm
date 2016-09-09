@@ -1,5 +1,6 @@
 Library
   structure Main
+  structure Util
   signature HANABI
   structure Hanabi
   signature PLAYER
@@ -7,8 +8,9 @@ Library
 is
   cmlib/cmlib.cm
   src/main.sml
+  src/util.sml
+  src/ansi.sml
   src/hanabi.sig
   src/hanabi.sml
-  src/ansi.sml
   src/player.sig
   src/simple.sml

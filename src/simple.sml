@@ -3,31 +3,7 @@ struct
 
   open Hanabi
 
-  (* FIXME move general-purpose functions elsewhere *)
-
-  (* Returns the number of elements of xs satisfying f. *)
-  fun count (f : 'a -> bool) (xs : 'a list) : int =
-    foldl (fn (x,n) => if f x then n+1 else n) 0 xs
-
-  (* Applies f to each element from right to left, until f x is true.
-   * Returns SOME x if such an x exists, otherwise it returns NONE. *)
-  fun revFind (f : 'a -> bool) (xs : 'a list) : 'a option =
-    if null xs then NONE else
-      case revFind f (tl xs) of
-           NONE => if f (hd xs) then SOME (hd xs) else NONE
-         | SOME y => SOME y
-
-  (* Applies f to each element from left to right, until f x is true. Returns
-   * SOME i if such an x exists at index i, otherwise it returns NONE. *)
-  fun findIndex (f : 'a -> bool) (xs : 'a list) : int option =
-  let
-    fun loop xs i =
-      case xs of
-           [] => NONE
-         | x::xs' => if f x then SOME i else loop xs' (i+1)
-  in
-    loop xs 0
-  end
+  (* FIXME move general-purpose Hanabi functions elsewhere *)
 
   val ranks = [1,1,1,2,2,3,3,4,4,5]
   val suits = [White,Yellow,Green,Blue,Red,Rainbow]
@@ -46,14 +22,14 @@ struct
   fun isUseless (s : state) ((su,r) : card) = r <= SD.lookup (#inPlay s) su
 
   fun isVital (s : state) ((su,r) : card) =
-    numOfRank r - 1 = count (fn r' => r = r') (SD.lookup (#inDiscard s) su)
+    numOfRank r - 1 = Util.count (fn r' => r = r') (SD.lookup (#inDiscard s) su)
 
   fun isClued (is : info list) = List.exists
     (fn i => case i of IsSuit _ => true | IsRank _ => true | _ => false) is
 
   (* Drawn cards are added to the front of the hand. *)
   fun oldestUnclued (xs : ('a * info list) list) : 'a option =
-    Option.map #1 (revFind (fn (_,is) => not (isClued is)) xs)
+    Option.map #1 (Util.revFind (fn (_,is) => not (isClued is)) xs)
 
   (* Returns index of oldest unclued card in our own hand. *)
   fun ourOldestUnclued (xs : info list list) : int option =
@@ -61,11 +37,21 @@ struct
 
   (* Returns index of newest just-clued card in our own hand. *)
   fun ourNewestJustClued (s : state) : int option =
-    findIndex (fn is => case is of
-                             (IsSuit _)::_ => true
-                           | (IsRank _)::_ => true
-                           | _ => false)
-              (#clues s)
+    Util.findIndex (fn is => case is of
+                                  (IsSuit _)::_ => true
+                                | (IsRank _)::_ => true
+                                | _ => false)
+                   (#clues s)
+
+  (* Returns the newest card matching the given hint. *)
+  fun newestMatching (s : state) (a : action) : card option =
+    case a of
+         HintSuit (i,su') =>
+           List.find (fn (su,r) => su = Rainbow orelse su = su')
+             (map #1 (List.nth (#hands s,i)))
+       | HintRank (i,r') =>
+           List.find (fn (su,r) => r = r') (map #1 (List.nth (#hands s,i)))
+       | _ => NONE
 
   (* TODO Missing features:
    * - finesse, reverse finesse, bluff
@@ -99,7 +85,7 @@ struct
     | isSaveClue s _ = false
 
   (* Is the most recent action a play clue to me (and if so, for which card)? *)
-  fun checkForPlayHint (s : state) : action option =
+  fun receivedPlayHint (s : state) : action option =
     case #log s 1 of
          (pl,HintedSuit (Me,su,[]))::_ => Option.map Play (ourNewestJustClued s)
        | (pl,HintedRank (Me,r,[]))::_ => if isSaveClue s (pl,HintedRank (Me,r,[]))
@@ -108,9 +94,27 @@ struct
        | _ => NONE
 
   (* TODO *)
+  (* Does the next player have a hintable, playable card (and if so, how)? *)
+  fun givePlayHint (s : state) : action option =
+  let
+    val hand = hd (#hands s)
+    val playable = List.filter (fn (c,_) => isPlayable s c) hand
+    val suits = if List.exists (fn ((su,r),_) => su = Rainbow) hand
+                then [White,Yellow,Green,Blue,Red]
+                else [] (* TODO *)
+    val ranks = [] (* TODO *)
+    val foo = [] (* TODO *)
+  in
+    if #hints s = 0 orelse null foo then NONE else hd foo
+  end
+
+  val otherwise = Util.otherwise
+  infix 4 otherwise
+
+  (* TODO *)
   fun play s =
-    case checkForPlayHint s of
-         SOME a => a
-       | NONE => Play 0
+    receivedPlayHint s otherwise (fn () =>
+    givePlayHint s otherwise (fn () =>
+    Play 0))
 
 end
