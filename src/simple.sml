@@ -117,8 +117,7 @@ struct
   val otherwise = Util.otherwise
   infix 4 otherwise
 
-  (* FIXME - turns mechanism is broken I think? *)
-
+  (* TODO prioritize save hints? *)
   fun play s =
     receivedPlayHint s otherwise (fn () =>
     givePlayHint s otherwise (fn () =>

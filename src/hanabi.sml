@@ -96,6 +96,11 @@ struct
          [] => raise Empty
        | _::t => withHands s (hand :: t)
 
+  fun withFewerTurns (s : fstate) : fstate =
+    case #turns s of
+         Deck _ => s
+       | Turns n => withTurns s (Turns (n-1))
+
   fun suitColor su = case su of
                          White => Ansi.bright_white
                        | Yellow => Ansi.bright_yellow
@@ -224,8 +229,10 @@ struct
    * Otherwise, start or decrement turn counter. *)
   fun drawCard (s : fstate) : fstate =
     case (#inDeck s,#turns s) of
-         ([], Deck _) => withTurns s (Turns (length (#hands s)))
-       | ([], Turns n) => withTurns s (Turns (n-1))
+         ([], Turns n) => withTurns s (Turns (n-1))
+       | (c::[], Deck 1) => withTurns
+           (withInDeck (withCurHand s ((c,[]) :: hd (#hands s))) [])
+           (Turns (length (#hands s)))
        | (c::cs, Deck n) => withTurns (withInDeck
            (withCurHand s ((c,[]) :: hd (#hands s))) cs) (Deck (n-1))
        | _ => raise Fail "Illegal game state."
@@ -265,9 +272,9 @@ struct
              fun info c = if hinted c then IsSuit su else NotSuit su
              val newLog = HintedSuit (Other i,su,List.filter hinted (List.map #1 ith))
            in
-             withHands
+             withFewerTurns (withHands
                (withHints (withLogCons s newLog) (#hints s - 1))
-               (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next)
+               (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next))
            end
        | HintRank (i,r) =>
            let
@@ -276,9 +283,9 @@ struct
              val newLog = HintedRank (Other i,r,
                List.filter (fn (su,r') => r = r') (List.map #1 ith))
            in
-             withHands
+             withFewerTurns (withHands
                (withHints (withLogCons s newLog) (#hints s - 1))
-               (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next)
+               (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next))
            end
 
   (* Returns the first n elements of the game log, adjusting player numbers
