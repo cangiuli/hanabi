@@ -53,7 +53,7 @@ struct
            List.find (fn (su,r) => r = r') (map #1 (List.nth (#hands s,i)))
        | _ => NONE
 
-  (* TODO Missing features:
+  (* Missing features:
    * - finesse, reverse finesse, bluff
    * - endgame awareness
    * - to be a save clue, must be possibly both vital and unplayable
@@ -66,16 +66,14 @@ struct
    * Other clues are play clues on the newest clued card.
    *
    * Look at previous action. If it was a play clue for us, play it.
-   * TODO - if it was a save clue for us, note its possible values
-   *
    * Otherwise, look at next player's hand.
    *   If a play clue can be given, give it.
    *   Otherwise, if the oldest unclued card is vital, give a save clue.
-   *   Otherwise, discard oldest unclued card.
+   *   Otherwise, discard oldest unclued card (or if impossible, play randomly).
    *)
 
-  (* For p the most recent play, is it a number clue to me which applies to the
-   * oldest card about which we previously had no positive information? *)
+  (* Is this action a number clue to me which applies to the oldest card
+   * about which we previously had no positive information? *)
   fun isSaveClue (s : state) (_,HintedRank (Me,r,[])) =
     (case ourOldestUnclued (map tl (#clues s)) of
           NONE => false
@@ -93,28 +91,39 @@ struct
                                          else Option.map Play (ourNewestJustClued s)
        | _ => NONE
 
-  (* TODO *)
   (* Does the next player have a hintable, playable card (and if so, how)? *)
   fun givePlayHint (s : state) : action option =
-  let
-    val hand = hd (#hands s)
-    val playable = List.filter (fn (c,_) => isPlayable s c) hand
-    val suits = if List.exists (fn ((su,r),_) => su = Rainbow) hand
-                then [White,Yellow,Green,Blue,Red]
-                else [] (* TODO *)
-    val ranks = [] (* TODO *)
-    val foo = [] (* TODO *)
-  in
-    if #hints s = 0 orelse null foo then NONE else hd foo
-  end
+    if #hints s = 0
+    then NONE
+    else List.find (fn a => Util.maybe false (isPlayable s) (newestMatching s a))
+                   (map (fn su => HintSuit (0,su)) [White,Yellow,Green,Blue,Red] @
+                    map (fn r => HintRank (0,r)) [1,2,3,4,5])
+
+  (* Is the next player's oldest unclued card vital (if so, save it)? *)
+  fun giveSaveHint (s : state) : action option =
+    case oldestUnclued (hd (#hands s)) of
+         SOME (su,r) => if isVital s (su,r) andalso #hints s > 0
+                        then SOME (HintRank (0,r))
+                        else NONE
+       | NONE => NONE
+
+  (* TODO instead, oldest non-useless card *)
+  (* Discard oldest unclued card in our hand (if possible). *)
+  fun discardOldestUnclued (s : state) : action option =
+    if #hints s = 8
+    then NONE
+    else Option.map Discard (ourOldestUnclued (#clues s))
 
   val otherwise = Util.otherwise
   infix 4 otherwise
 
-  (* TODO *)
+  (* FIXME - turns mechanism is broken I think? *)
+
   fun play s =
     receivedPlayHint s otherwise (fn () =>
     givePlayHint s otherwise (fn () =>
-    Play 0))
+    giveSaveHint s otherwise (fn () =>
+    discardOldestUnclued s otherwise (fn () =>
+    Play (MTRand.randInt (length (#clues s)))))))
 
 end

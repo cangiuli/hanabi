@@ -21,8 +21,7 @@ struct
   fun count (f : 'a -> bool) (xs : 'a list) : int =
     foldl (fn (x,n) => if f x then n+1 else n) 0 xs
 
-  (* Applies f to each element from right to left, until f x is true.
-   * Returns SOME x if such an x exists, otherwise it returns NONE. *)
+  (* revFind f xs = find f (rev xs) *)
   fun revFind (f : 'a -> bool) (xs : 'a list) : 'a option =
     if null xs then NONE else
       case revFind f (tl xs) of
@@ -40,6 +39,10 @@ struct
   in
     loop xs 0
   end
+
+  (* Returns f v if opt is SOME v; otherwise it returns NONE. *)
+  fun maybe (def : 'b) (f : 'a -> 'b) (opt : 'a option) : 'b =
+    Option.getOpt (Option.map f opt, def)
 
   (* Returns v if opt is SOME v; otherwise it returns f (). *)
   fun otherwise (opt : 'a option, f : unit -> 'a) : 'a =

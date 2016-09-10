@@ -339,7 +339,7 @@ struct
      "Fuses: " ^ Int.toString (#fuses s) ^ " " ^
      (case #turns s of
            Deck n => "Deck: " ^ (Int.toString n)
-         | Turns n => (Int.toString n) ^ " turns remain.") ^ "\n" ^
+         | Turns n => "(" ^ (Int.toString n) ^ " turn(s) remain.)") ^ "\n" ^
      "Play: " ^
      (cardsToString (map (fn su => (su,SD.lookup (#inPlay s) su)) suits)) ^
      " (Score: " ^ Int.toString (score s) ^ ")\n" ^
