@@ -3,8 +3,6 @@ struct
 
   open Hanabi
 
-  (* FIXME move general-purpose Hanabi functions elsewhere *)
-
   val ranks = [1,1,1,2,2,3,3,4,4,5]
   val suits = [White,Yellow,Green,Blue,Red,Rainbow]
 
@@ -18,7 +16,6 @@ struct
 
   fun isPlayable (s : state) ((su,r) : card) = r = (SD.lookup (#inPlay s) su) + 1
 
-  (* TODO also check for unreachable cards *)
   fun isUseless (s : state) ((su,r) : card) = r <= SD.lookup (#inPlay s) su
 
   fun isVital (s : state) ((su,r) : card) =
@@ -52,13 +49,6 @@ struct
        | HintRank (i,r') =>
            List.find (fn (su,r) => r = r') (map #1 (List.nth (#hands s,i)))
        | _ => NONE
-
-  (* Missing features:
-   * - finesse, reverse finesse, bluff
-   * - endgame awareness
-   * - to be a save clue, must be possibly both vital and unplayable
-   * - save information across invocations
-   *)
 
   (* Very simple strategy:
    *
@@ -107,7 +97,6 @@ struct
                         else NONE
        | NONE => NONE
 
-  (* TODO instead, oldest non-useless card *)
   (* Discard oldest unclued card in our hand (if possible). *)
   fun discardOldestUnclued (s : state) : action option =
     if #hints s = 8
@@ -117,7 +106,6 @@ struct
   val otherwise = Util.otherwise
   infix 4 otherwise
 
-  (* TODO prioritize save hints? *)
   fun play s =
     receivedPlayHint s otherwise (fn () =>
     givePlayHint s otherwise (fn () =>
