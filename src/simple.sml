@@ -69,6 +69,15 @@ struct
   fun ourOldestUseless (s : state) (xs : info list list) : int option =
     Util.revFindIndex (isUseless' s) xs
 
+  (* Returns whether a card is definitely not playable *)
+  fun isNotPlayable (s : state) (is : info list) : bool =
+  let
+    val sus = SSet.toList (possibleSuits is)
+    val rs = possibleRanks is
+  in
+    List.all (fn su => not (RSet.member rs (SD.lookup (#inPlay s) su + 1))) sus
+  end
+
   (* Very simple strategy:
    *
    * A number clue including the oldest unclued card is a save clue.
@@ -79,7 +88,9 @@ struct
    *   If a play clue can be given, give it.
    *   Otherwise, if the oldest unclued card is vital, give a save clue.
    *   Otherwise, discard oldest card known to be already played.
-   *   Otherwise, discard oldest unclued card (or if impossible, play randomly).
+   *   Otherwise, discard oldest unclued card
+   *   Otherwise, try to clue a number to the next player which cannot be interpreted as a play hint
+   *   Otherwise, play your newest card
    *)
 
   (* Is this action a number clue to me which applies to the oldest card
@@ -92,13 +103,20 @@ struct
                         | _ => false))
     | isSaveClue s _ = false
 
+  (* If the newest card which is just clued is playable, play it *)
+  fun playNewestJustClued (s : state) : action option =
+    Option.mapPartial (fn i => if isNotPlayable s (List.nth (#clues s, i))
+			       then NONE
+			       else SOME (Play i))
+		      (ourNewestJustClued s)
+
   (* Is the most recent action a play clue to me (and if so, for which card)? *)
   fun receivedPlayHint (s : state) : action option =
     case #log s 1 of
-         (pl,HintedSuit (Me,su,[]))::_ => Option.map Play (ourNewestJustClued s)
+         (pl,HintedSuit (Me,su,[]))::_ => playNewestJustClued s
        | (pl,HintedRank (Me,r,[]))::_ => if isSaveClue s (pl,HintedRank (Me,r,[]))
                                          then NONE
-                                         else Option.map Play (ourNewestJustClued s)
+                                         else playNewestJustClued s
        | _ => NONE
 
   (* Does the next player have a hintable, playable card (and if so, how)? *)
@@ -128,6 +146,28 @@ struct
     then NONE
     else Option.map Discard (ourOldestUnclued (#clues s))
 
+  (* Try to give a hint pointing at 0 cards.
+   * Currently it will only try to give rank hints to the next player, but this can be extended *)
+  fun giveBlankHint (s : state) : action option =
+    if #hints s = 0
+    then NONE
+    else Option.map (fn i => HintRank (0, i))
+		    (List.find (fn i => not (List.exists (fn x => #2 (#1 x) = i) (hd (#hands s))))
+			       [5,4,3,2,1])
+
+  (* Give a hint which cannot be interpreted as a play hint
+   * This will hint 5 if that hint cannot be interpreted as a play hint;
+   * Otherwise it will hint 1 if all 1s have been played;
+   * Otherwise it will try to give a blank hint *)
+  fun wasteHint (s : state) : action option =
+    if #hints s = 0
+    then NONE
+    else if List.all (fn su => SD.lookup (#inPlay s) su <> 4) (SSet.toList suits)
+    then SOME (HintRank (0, 5))
+    else if List.all (fn su => SD.lookup (#inPlay s) su > 0) (SSet.toList suits)
+    then SOME (HintRank (0, 1))
+    else giveBlankHint s
+
   val otherwise = Util.otherwise
   infix 4 otherwise
 
@@ -137,6 +177,7 @@ struct
     giveSaveHint s otherwise (fn () =>
     discardUseless s otherwise (fn () =>
     discardOldestUnclued s otherwise (fn () =>
-    Play (MTRand.randInt (length (#clues s))))))))
+    wasteHint s otherwise (fn () =>
+    Play 0))))))
 
 end
