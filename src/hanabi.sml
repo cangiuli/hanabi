@@ -367,4 +367,15 @@ struct
     printState s; print "\n"; score (gameLoop s ps trace)
   end
 
+  (* Play n games of Hanabi between players ps, silently. *)
+  fun newGames (n : int) (ps : (state -> action) list) : int list =
+  let
+    val num = if length ps < 2 orelse length ps > 5
+              then raise Fail "Invalid number of players."
+              else length ps
+    fun play _ = score (gameLoop (newGameState num) ps (fn _ => ()))
+  in
+    List.tabulate (n, play)
+  end
+
 end

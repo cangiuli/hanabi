@@ -33,5 +33,6 @@ sig
                 inDiscard : rank list SD.dict}
 
   val newGame : (state -> action) list -> int
+  val newGames : int -> (state -> action) list -> int list
 
 end
