@@ -40,6 +40,13 @@ struct
     loop xs 0
   end
 
+  (* revFindIndex f xs = findIndex f (rev xs) *)
+  fun revFindIndex (f : 'a -> bool) (xs : 'a list) : int option =
+    if null xs then NONE else
+      case revFindIndex f (tl xs) of
+           NONE => if f (hd xs) then SOME 0 else NONE
+         | SOME i => SOME (i+1)
+
   (* Returns f v if opt is SOME v; otherwise it returns NONE. *)
   fun maybe (def : 'b) (f : 'a -> 'b) (opt : 'a option) : 'b =
     Option.getOpt (Option.map f opt, def)
@@ -49,5 +56,9 @@ struct
     case opt of
          SOME v => v
        | NONE => f ()
+
+  (* checks whether x is in l *)
+  fun elem (l : ''a list) (x : ''a) : bool =
+  List.exists (fn y => y = x) l
 
 end

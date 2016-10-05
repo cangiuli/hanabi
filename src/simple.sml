@@ -5,6 +5,7 @@ struct
 
   val ranks = [1,1,1,2,2,3,3,4,4,5]
   val suits = [White,Yellow,Green,Blue,Red,Rainbow]
+  val normalSuits = [White,Yellow,Green,Blue,Red]
 
   fun numOfRank r = if r = 1 then 3 else if r = 5 then 1 else 2
 
@@ -30,7 +31,7 @@ struct
 
   (* Returns index of oldest unclued card in our own hand. *)
   fun ourOldestUnclued (xs : info list list) : int option =
-    oldestUnclued (ListPair.zip (List.tabulate (5,fn n => n), xs))
+    Util.revFindIndex (not o isClued) xs
 
   (* Returns index of newest just-clued card in our own hand. *)
   fun ourNewestJustClued (s : state) : int option =
@@ -50,6 +51,55 @@ struct
            List.find (fn (su,r) => r = r') (map #1 (List.nth (#hands s,i)))
        | _ => NONE
 
+  (* Gives the clued rank of a card, returns NONE if no number clue has been given *)
+  fun cluedRank (is : info list) : int option =
+    case List.find (fn i => case i of IsRank _ => true | _ => false) is of
+      SOME (IsRank r) => SOME r
+     | _ => NONE
+
+  (* Gives the list of negative rank information of a card *)
+  fun cluedNotRank (is : info list) : int list =
+    List.mapPartial (fn i => case i of NotRank r => SOME r | _ => NONE) is
+
+  (* Gives the list of negative color information of a card *)
+  fun cluedNotSuit (is : info list) : suit list =
+    List.mapPartial (fn i => case i of NotSuit su => SOME su | _ => NONE) is
+
+  (* Gives the clued suit, returns Rainbow if 2 different suit clues have been given *)
+  fun cluedSuit (is : info list) : suit option =
+  case List.mapPartial (fn i => case i of IsSuit su => SOME su | _ => NONE) is of
+       [] => NONE
+     | x :: xs => if List.exists (fn su => su <> x) xs then SOME Rainbow else SOME x
+
+  (* Returns the list of possible suits a card can have *)
+  fun possibleSuits (is : info list) : suit list =
+    case cluedSuit is of
+	 SOME Rainbow => [Rainbow]
+       | SOME su => if null (cluedNotSuit is) then [su, Rainbow] else [su]
+       | NONE =>
+	 let
+	     val sus = cluedNotSuit is
+	 in
+	     (List.filter (not o Util.elem sus) normalSuits) @ (if null sus then [Rainbow] else [])
+	 end
+
+  (* Returns the highest possible rank of a card *)
+  fun highestPossibleRank (is : info list) : int =
+    case cluedRank is of
+	 SOME i => i
+       | NONE => Option.valOf (List.find (fn i => not (Util.elem is (NotRank i))) [5,4,3,2,1])
+
+  (* Returns whether it can be deduced that a card is already played *)
+  fun mustBeUseless (s : state) (is : info list) : bool =
+  let
+    val m = highestPossibleRank is
+  in
+    List.all (fn su => m <= SD.lookup (#inPlay s) su) (possibleSuits is)
+  end
+
+  fun ourOldestUseless (s : state) (xs : info list list) : int option =
+    Util.revFindIndex (mustBeUseless s) xs
+
   (* Very simple strategy:
    *
    * A number clue including the oldest unclued card is a save clue.
@@ -59,6 +109,7 @@ struct
    * Otherwise, look at next player's hand.
    *   If a play clue can be given, give it.
    *   Otherwise, if the oldest unclued card is vital, give a save clue.
+   *   Otherwise, discard oldest card known to be already played
    *   Otherwise, discard oldest unclued card (or if impossible, play randomly).
    *)
 
@@ -97,6 +148,12 @@ struct
                         else NONE
        | NONE => NONE
 
+  (* Discard useless card in our hand (if possible). *)
+  fun discardUseless (s : state) : action option =
+    if #hints s = 8
+    then NONE
+    else Option.map Discard (ourOldestUseless s (#clues s))
+
   (* Discard oldest unclued card in our hand (if possible). *)
   fun discardOldestUnclued (s : state) : action option =
     if #hints s = 8
@@ -110,7 +167,8 @@ struct
     receivedPlayHint s otherwise (fn () =>
     givePlayHint s otherwise (fn () =>
     giveSaveHint s otherwise (fn () =>
+    discardUseless s otherwise (fn () =>
     discardOldestUnclued s otherwise (fn () =>
-    Play (MTRand.randInt (length (#clues s)))))))
+    Play (MTRand.randInt (length (#clues s))))))))
 
 end
