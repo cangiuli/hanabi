@@ -1,29 +1,7 @@
 structure SimplePlayer :> PLAYER =
 struct
 
-  open Hanabi
-
-  val ranks = [1,1,1,2,2,3,3,4,4,5]
-  val suits = [White,Yellow,Green,Blue,Red,Rainbow]
-  val suits' = [White,Yellow,Green,Blue,Red]
-
-  fun numOfRank r = if r = 1 then 3 else if r = 5 then 1 else 2
-
-  fun score (s : state) : int = foldl (op +) 0 (map (SD.lookup (#inPlay s)) suits)
-
-  fun players (s : state) : int = 1 + length (#hands s)
-
-  fun lastRound (s : state) : (player * play) list = #log s (players s)
-
-  fun isPlayable (s : state) ((su,r) : card) = r = (SD.lookup (#inPlay s) su) + 1
-
-  fun isUseless (s : state) ((su,r) : card) = r <= SD.lookup (#inPlay s) su
-
-  fun isVital (s : state) ((su,r) : card) =
-    numOfRank r - 1 = Util.count (fn r' => r = r') (SD.lookup (#inDiscard s) su)
-
-  fun isClued (is : info list) = List.exists
-    (fn i => case i of IsSuit _ => true | IsRank _ => true | _ => false) is
+  open UtilHanabi
 
   (* Drawn cards are added to the front of the hand. *)
   fun oldestUnclued (xs : ('a * info list) list) : 'a option =
@@ -52,13 +30,13 @@ struct
        | _ => NONE
 
   (* Gives the clued rank of a card, if it exists. *)
-  fun cluedRank (is : info list) : int option =
+  fun cluedRank (is : info list) : rank option =
     case List.find (fn i => case i of IsRank _ => true | _ => false) is of
          SOME (IsRank r) => SOME r
        | _ => NONE
 
   (* Gives the list of negative rank information of a card. *)
-  fun cluedNotRank (is : info list) : int list =
+  fun cluedNotRank (is : info list) : rank list =
     List.mapPartial (fn i => case i of NotRank r => SOME r | _ => NONE) is
 
   (* Gives the list of negative suit information of a card. *)
@@ -139,8 +117,7 @@ struct
     if #hints s = 0
     then NONE
     else List.find (fn a => Util.maybe false (isPlayable s) (newestMatching s a))
-                   (map (fn su => HintSuit (0,su)) [White,Yellow,Green,Blue,Red] @
-                    map (fn r => HintRank (0,r)) [1,2,3,4,5])
+                   (allHints 0)
 
   (* Is the next player's oldest unclued card vital (if so, save it)? *)
   fun giveSaveHint (s : state) : action option =

@@ -57,7 +57,7 @@ struct
          SOME v => v
        | NONE => f ()
 
-  (* checks whether x is in l *)
+  (* Returns true iff x is in l. *)
   fun elem (l : ''a list) (x : ''a) : bool =
   List.exists (fn y => y = x) l
 

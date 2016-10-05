@@ -4,6 +4,7 @@ Library
   signature HANABI
   structure Hanabi
   signature PLAYER
+  structure UtilHanabi
   structure SimplePlayer
 is
   cmlib/cmlib.cm
@@ -13,4 +14,5 @@ is
   src/hanabi.sig
   src/hanabi.sml
   src/player.sig
+  src/utilhanabi.sml
   src/simple.sml
