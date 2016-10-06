@@ -29,52 +29,41 @@ struct
            List.find (fn (su,r) => r = r') (map #1 (List.nth (#hands s,i)))
        | _ => NONE
 
-  (* Gives the clued rank of a card, if it exists. *)
+  (* Returns the (directly) clued rank of a card, if it exists. *)
   fun cluedRank (is : info list) : rank option =
     case List.find (fn i => case i of IsRank _ => true | _ => false) is of
          SOME (IsRank r) => SOME r
        | _ => NONE
 
-  (* Gives the list of negative rank information of a card. *)
-  fun cluedNotRank (is : info list) : rank list =
-    List.mapPartial (fn i => case i of NotRank r => SOME r | _ => NONE) is
+  (* Returns the set of possible ranks of a card. *)
+  fun possibleRanks (is : info list) : RSet.set =
+    case is of
+         (IsRank r)::_ => RSet.singleton r
+       | (NotRank r)::xs => RSet.remove (possibleRanks xs) r
+       | _::xs => possibleRanks xs
+       | [] => ranks
 
-  (* Gives the list of negative suit information of a card. *)
-  fun cluedNotSuit (is : info list) : suit list =
-    List.mapPartial (fn i => case i of NotSuit su => SOME su | _ => NONE) is
-
-  (* Gives the clued suit or Rainbow if multiple suits clued. *)
+  (* Returns the (directly) clued suit, or Rainbow if there is more than one. *)
   fun cluedSuit (is : info list) : suit option =
     case List.mapPartial (fn i => case i of IsSuit su => SOME su | _ => NONE) is of
          [] => NONE
        | x::xs => if List.exists (fn su => su <> x) xs then SOME Rainbow else SOME x
 
-  (* Returns the list of possible suits a card can have. *)
-  fun possibleSuits (is : info list) : suit list =
-    case cluedSuit is of
-         SOME Rainbow => [Rainbow]
-       | SOME su => if null (cluedNotSuit is) then [su, Rainbow] else [su]
-       | NONE =>
-           let
-             val sus = cluedNotSuit is
-           in
-             (List.filter (not o Util.elem sus) suits') @
-             (if null sus then [Rainbow] else [])
-           end
+  (* Returns the set of possible suits of a card. *)
+  fun possibleSuits (is : info list) : SSet.set =
+    case is of
+         (IsSuit su)::xs => SSet.intersection (possibleSuits xs) (rainbowAnd su)
+       | (NotSuit su)::xs => SSet.difference (possibleSuits xs) (rainbowAnd su)
+       | _::xs => possibleSuits xs
+       | [] => suits
 
-  (* Returns the highest possible rank of a card. *)
-  fun highestPossibleRank (is : info list) : int =
-    case cluedRank is of
-         SOME i => i
-       | NONE => Option.valOf (List.find (fn i => not (Util.elem is (NotRank i)))
-                                         [5,4,3,2,1])
-
-  (* From the given clues, is this card useless? *)
+  (* Is this card guaranteed to be useless? *)
   fun isUseless' (s : state) (is : info list) : bool =
   let
-    val r = highestPossibleRank is
+    val maxRank = RSet.foldl Int.max 0 (possibleRanks is)
+    val allSuits = SSet.toList (possibleSuits is)
   in
-    List.all (fn su => r <= SD.lookup (#inPlay s) su) (possibleSuits is)
+    List.all (fn su => maxRank <= SD.lookup (#inPlay s) su) allSuits
   end
 
   fun ourOldestUseless (s : state) (xs : info list list) : int option =
