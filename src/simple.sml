@@ -78,6 +78,20 @@ struct
     List.all (fn su => not (RSet.member rs (SD.lookup (#inPlay s) su + 1))) sus
   end
 
+  (* check whether a card in your own hand is definitely not vital *)
+  fun isNotVital (s : state) (is : info list) : bool =
+  let
+    val rs = possibleRanks is
+    val sus = possibleSuits is
+  in
+    if RSet.member rs 5 then false else
+      List.all (fn su => List.all (fn r => isUseless s (su, r) orelse not (isVital s (su, r)))
+				  (RSet.toList rs))
+	       (SSet.toList sus)
+
+  end
+
+
   (* Very simple strategy:
    *
    * A number clue including the oldest unclued card is a save clue.
@@ -89,8 +103,9 @@ struct
    *   Otherwise, if the oldest unclued card is vital, give a save clue.
    *   Otherwise, discard oldest card known to be already played.
    *   Otherwise, discard oldest unclued card
-   *   Otherwise, try to clue a number to the next player which cannot be interpreted as a play hint
-   *   Otherwise, play your newest card
+   *   Otherwise, try to give to the next player which cannot be interpreted as a play hint
+   *   Otherwise, discard the least vital card
+   *   Otherwise you have 8 clues, and then you clue 1 to the next player.
    *)
 
   (* Is this action a number clue to me which applies to the oldest card
@@ -171,6 +186,20 @@ struct
   val otherwise = Util.otherwise
   infix 4 otherwise
 
+  (* Try to find the least harmful discard action.
+   * It first tries to discard the oldest card known to be not vital (the oldest);
+   * Then it will try to discard a card not marked with number (the newest);
+   * (TO DO: discard card which was never saved when it was on the chop)
+   * Otherwise it will discard the card clued with the highest rank (the oldest).
+   * This function assumes that discardOldestUnclued returned NONE, and only returns NONE if there
+     are 8 hints available *)
+  fun discardAny (s : state) : action option =
+    if #hints s = 8 then NONE else
+    SOME (Option.map Discard (Util.revFindIndex (isNotVital s) (#clues s)) otherwise (fn () =>
+          Option.map Discard (Util.findIndex (not o isSome o cluedRank) (#clues s))
+                     otherwise (fn () =>
+          Discard (Util.revFindMaxIndex (valOf o cluedRank) (#clues s)))))
+
   fun play s =
     receivedPlayHint s otherwise (fn () =>
     givePlayHint s otherwise (fn () =>
@@ -178,6 +207,7 @@ struct
     discardUseless s otherwise (fn () =>
     discardOldestUnclued s otherwise (fn () =>
     wasteHint s otherwise (fn () =>
-    Play 0))))))
+    discardAny s otherwise (fn () =>
+    HintRank (0, 1))))))))
 
 end

@@ -61,4 +61,36 @@ struct
   fun elem (l : ''a list) (x : ''a) : bool =
   List.exists (fn y => y = x) l
 
+  (* find the (smallest) index where f is maximal. Raises an error if l is empty *)
+  fun findMaxIndex (f : 'a -> int) (l : 'a list) =
+  let
+    fun loop (l' : 'a list) (max : int) (maxInd : int) (currInd : int) =
+    case l' of [] => maxInd | x::xs =>
+      let val n = f x in
+        if n > max
+        then loop xs n currInd (currInd + 1)
+        else loop xs max maxInd (currInd + 1)
+      end
+  in
+    case l of
+         [x] => 0 (* no need to call f if the list is a singleton *)
+       | x::xs => loop xs (f x) 0 1
+  end
+
+  (* revFindMaxIndex f l = findMaxIndex f (rev l) *)
+  fun revFindMaxIndex (f : 'a -> int) (l : 'a list) =
+  let
+    fun loop (l' : 'a list) (max : int) (maxInd : int) (currInd : int) =
+    case l' of [] => maxInd | x::xs =>
+      let val n = f x in
+        if n >= max
+        then loop xs n currInd (currInd + 1)
+        else loop xs max maxInd (currInd + 1)
+      end
+  in
+    case l of
+         [x] => 0 (* no need to call f if the list is a singleton *)
+       | x::xs => loop xs (f x) 0 1
+  end
+
 end
