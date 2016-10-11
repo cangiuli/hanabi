@@ -378,4 +378,20 @@ struct
     List.tabulate (n, play)
   end
 
+  (* Play ngames games of Hanabi with 2, 3, 4, and 5 players with strategy pl. *)
+  fun newGamesAllPlayers (ngames : int) (pl : unit -> state -> action) : unit =
+  if ngames <= 0 then () else
+  (print ("Average score +/- 2 * standard error (range) over " ^
+          Int.toString ngames ^ " games:\n");
+  List.tabulate (4, fn n =>
+  let val scores = newGames ngames (List.tabulate (n+2, fn i => pl)) in
+    print (Int.toString (n+2) ^ " players: " ^
+           Real.fmt (StringCvt.FIX (SOME 3)) (Util.mean scores) ^ " +/- " ^
+           Real.fmt (StringCvt.FIX (SOME 3)) (2.0 * Util.stdDev scores) ^ " (" ^
+           Int.toString (Util.findMin (fn i => i) scores) ^ "-" ^
+           Int.toString (Util.findMax (fn i => i) scores) ^ "). Example scores: " ^
+           String.concatWith "," (map Int.toString (List.take (scores, Int.min (ngames, 10)))) ^
+           ".\n")
+  end); ())
+
 end

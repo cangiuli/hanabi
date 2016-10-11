@@ -34,5 +34,6 @@ sig
 
   val newGame : (state -> action) list -> int
   val newGames : int -> (state -> action) list -> int list
+  val newGamesAllPlayers : int -> (unit -> state -> action) -> unit
 
 end

@@ -93,4 +93,42 @@ struct
        | x::xs => loop xs (f x) 0 1
   end
 
+  fun mean (is : int list) : real =
+    real (foldr (fn (i, j) => i + j) 0 is) / real (length is)
+
+  fun stdDev (is : int list) : real =
+  let
+    val m = mean is
+    val n = length is
+    val error = foldr (fn (i, j) => (real i - m) * (real i - m) + j) 0.0  is
+  in
+    Math.sqrt (error / real ((n - 1) * n))
+  end
+
+  (* find the value in l where f is maximal *)
+  fun findMax (f : 'a -> int) (l : 'a list) =
+  let
+    fun loop (l' : 'a list) (max : int) =
+    case l' of [] => max | x::xs =>
+      let val n = f x in
+        if n > max then loop xs n else loop xs max
+      end
+  in
+    case l of
+       x::xs => loop xs (f x)
+  end
+
+  (* similar to findMax *)
+  fun findMin (f : 'a -> int) (l : 'a list) =
+  let
+    fun loop (l' : 'a list) (min : int) =
+    case l' of [] => min | x::xs =>
+      let val n = f x in
+        if n < min then loop xs n else loop xs min
+      end
+  in
+    case l of
+       x::xs => loop xs (f x)
+  end
+
 end
