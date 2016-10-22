@@ -3,6 +3,19 @@ struct
 
   open UtilHanabi
 
+  (* The memory of a player.
+     isPlayable gives the list of playable card indices for each player *)
+  type memory = {isPlayable : int list list,
+                 test : int}
+
+  val initialMemory' : memory = {isPlayable = [], test = 0}
+  fun initialMemory (s : state) : memory =
+    {isPlayable = List.tabulate (players s, fn _ => []), test = 0}
+
+  fun memoryToString (m : memory) =
+  String.concatWith " " (map (fn is => "[" ^ String.concatWith ", " (map Int.toString is) ^ "]")
+                             (#isPlayable m))
+
   (* Drawn cards are added to the front of the hand. *)
   fun oldestUnclued (xs : ('a * info list) list) : 'a option =
     Option.map #1 (Util.revFind (fn (_,is) => not (isClued is)) xs)
@@ -200,14 +213,19 @@ struct
                      otherwise (fn () =>
           Discard (Util.revFindMaxIndex (valOf o cluedRank) (#clues s)))))
 
-  fun play s =
-    receivedPlayHint s otherwise (fn () =>
+  val play : unit -> state -> action =
+  let
+    val m : memory ref = ref initialMemory'
+  in
+    fn u => fn s =>
+    (receivedPlayHint s otherwise (fn () =>
     givePlayHint s otherwise (fn () =>
     giveSaveHint s otherwise (fn () =>
     discardUseless s otherwise (fn () =>
     discardOldestUnclued s otherwise (fn () =>
     wasteHint s otherwise (fn () =>
     discardAny s otherwise (fn () =>
-    HintRank (0, 1))))))))
+    HintRank (0, 1)))))))))
+  end
 
 end

@@ -1,6 +1,6 @@
 signature PLAYER =
 sig
 
-  val play : Hanabi.state -> Hanabi.action
+  val play : unit -> Hanabi.state -> Hanabi.action
 
 end
