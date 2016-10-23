@@ -56,4 +56,7 @@ struct
   fun isClued (is : info list) = List.exists
     (fn i => case i of IsSuit _ => true | IsRank _ => true | _ => false) is
 
+  fun playerToInt (pl : player) : int =
+    case pl of Me => 0 | Other i => i + 1
+
 end

@@ -8,13 +8,16 @@ struct
   type memory = {isPlayable : int list list,
                  test : int}
 
-  val initialMemory' : memory = {isPlayable = [], test = 0}
+  val emptyMemory : memory = {isPlayable = [], test = 0}
   fun initialMemory (s : state) : memory =
     {isPlayable = List.tabulate (players s, fn _ => []), test = 0}
 
   fun memoryToString (m : memory) =
-  String.concatWith " " (map (fn is => "[" ^ String.concatWith ", " (map Int.toString is) ^ "]")
-                             (#isPlayable m))
+    String.concatWith " " (map (fn is => "[" ^ String.concatWith ", " (map Int.toString is) ^ "]")
+                               (#isPlayable m))
+
+  fun withIsPlayable (m : memory) isPlayable' : memory =
+    {isPlayable = isPlayable', test = #test m}
 
   (* Drawn cards are added to the front of the hand. *)
   fun oldestUnclued (xs : ('a * info list) list) : 'a option =
@@ -147,6 +150,21 @@ struct
                                          else playNewestJustClued s
        | _ => NONE
 
+  (* update the list of playable cards in all hands (WIP) *)
+  fun updateIsPlayable (s : state) (m' : int list list) : int list list =
+  let
+    val m : int list list ref = ref m'
+    val cs = #log s (players s)
+    fun loop (a : player * play) : unit =
+    case a of
+         (pl',HintedSuit (pl,su,l)) => ()
+       | (pl',HintedRank (pl,r,l)) => ()
+       | (pl, Discarded c) => ()
+       | (pl, Played c) => ()
+  in
+    map loop cs; !m
+  end
+
   (* Does the next player have a hintable, playable card (and if so, how)? *)
   fun givePlayHint (s : state) : action option =
     if #hints s = 0
@@ -213,12 +231,17 @@ struct
                      otherwise (fn () =>
           Discard (Util.revFindMaxIndex (valOf o cluedRank) (#clues s)))))
 
+  fun initializeMemory (m : memory ref) (s : state) : unit =
+    if #turnNumber s <= players s then m := initialMemory s else ()
+
   val play : unit -> state -> action =
   let
-    val m : memory ref = ref initialMemory'
+    val m : memory ref = ref emptyMemory
   in
-    fn u => fn s =>
-    (receivedPlayHint s otherwise (fn () =>
+    fn u => fn s => (
+    initializeMemory m s;
+    m := withIsPlayable (!m) (updateIsPlayable s (#isPlayable (!m)));
+    receivedPlayHint s otherwise (fn () =>
     givePlayHint s otherwise (fn () =>
     giveSaveHint s otherwise (fn () =>
     discardUseless s otherwise (fn () =>

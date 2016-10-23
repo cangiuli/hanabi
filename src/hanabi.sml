@@ -48,6 +48,7 @@ struct
                  hands : (card * info list) list list,
                  log : play list,
                  turns : turns,
+                 turnNumber : int,
                  inDeck : card list,
                  inPlay : rank SD.dict,
                  inDiscard : rank list SD.dict}
@@ -60,34 +61,38 @@ struct
                 hands : (card * info list) list list,
                 log : int -> (player * play) list,
                 turns : turns,
+                turnNumber : int,
                 inPlay : rank SD.dict,
                 inDiscard : rank list SD.dict}
 
   (* Boilerplate, printing {{{ *)
   fun withHints (s : fstate) hints' : fstate =
-    {hints = hints', fuses = #fuses s, hands = #hands s, log = #log s, turns =
-    #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+    {hints = hints', fuses = #fuses s, hands = #hands s, log = #log s, turns = #turns s,
+     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withFuses (s : fstate) fuses' : fstate =
-    {hints = #hints s, fuses = fuses', hands = #hands s, log = #log s, turns =
-    #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+    {hints = #hints s, fuses = fuses', hands = #hands s, log = #log s, turns = #turns s,
+     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withHands (s : fstate) hands' : fstate =
-    {hints = #hints s, fuses = #fuses s, hands = hands', log = #log s, turns =
-    #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+    {hints = #hints s, fuses = #fuses s, hands = hands', log = #log s, turns = #turns s,
+     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withLog (s : fstate) log' : fstate =
-    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = log', turns =
-    #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = log', turns = #turns s,
+     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withTurns (s : fstate) turns' : fstate =
-    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns =
-    turns', inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns = turns',
+     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+  fun withTurnNumber (s : fstate) turnNumber' : fstate =
+    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns = #turns s,
+     turnNumber = turnNumber', inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withInDeck (s : fstate) inDeck' : fstate =
-    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns =
-    #turns s, inDeck = inDeck', inPlay = #inPlay s, inDiscard = #inDiscard s}
+    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns = #turns s,
+     turnNumber = #turnNumber s, inDeck = inDeck', inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withInPlay (s : fstate) inPlay' : fstate =
-    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns =
-    #turns s, inDeck = #inDeck s, inPlay = inPlay', inDiscard = #inDiscard s}
+    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns = #turns s,
+     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = inPlay', inDiscard = #inDiscard s}
   fun withInDiscard (s : fstate) inDiscard' : fstate =
-    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns =
-    #turns s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = inDiscard'}
+    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns = #turns s,
+     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = inDiscard'}
 
   fun withLogCons (s : fstate) play : fstate = withLog s (play :: #log s)
 
@@ -100,6 +105,9 @@ struct
     case #turns s of
          Deck _ => s
        | Turns n => withTurns s (Turns (n-1))
+
+  fun increaseTurnNumber (s : fstate) : fstate =
+    withTurnNumber s (#turnNumber s + 1)
 
   fun suitColor su = case su of
                          White => Ansi.bright_white
@@ -202,6 +210,7 @@ struct
      hands = map (map (fn x => (x,[]))) hands,
      log = [],
      turns = Deck (60 - numPlayers * size),
+     turnNumber = 1,
      inDeck = deck,
      inPlay = foldl (fn (su,d) => SD.insert d su 0) SD.empty suits,
      inDiscard = foldl (fn (su,d) => SD.insert d su []) SD.empty suits}
@@ -240,53 +249,54 @@ struct
   (* FIXME do something better than chaining so many update functions *)
   (* Current player advances the game state by an (assumed legal) action. *)
   fun enact (a : action, s : fstate) : fstate =
-    case a of
-         Discard i =>
-           let
-             val (((su,r),_),cs) = Util.splitNth (hd (#hands s), i)
-           in
-             withInDiscard
-               (drawCard (withCurHand (withLogCons
-                 (withHints s (#hints s + 1)) (Discarded (su,r))) cs))
-               (SD.insert (#inDiscard s) su (r :: SD.lookup (#inDiscard s) su))
-           end
-       | Play i =>
-           let
-             val (((su,r),_),cs) = Util.splitNth (hd (#hands s), i)
-           in
-             if (SD.lookup (#inPlay s) su) + 1 = r
-             then withInPlay
-                    (drawCard (withCurHand (withLogCons
-                      (withHints s (if r = 5 then (Int.min (#hints s + 1,8)) else #hints s))
-                      (Played (su,r))) cs))
-                    (SD.insert (#inPlay s) su r)
-             else withInDiscard
-                    (drawCard (withCurHand
-                      (withFuses (withLogCons s (Played (su,r))) (#fuses s - 1)) cs))
-                    (SD.insert (#inDiscard s) su (r::SD.lookup (#inDiscard s) su))
-           end
-       | HintSuit (i,su) =>
-           let
-             val (prev,ith::next) = Util.splitAt (#hands s, i+1)
-             fun hinted (su',r) = su = su' orelse su' = Rainbow
-             fun info c = if hinted c then IsSuit su else NotSuit su
-             val newLog = HintedSuit (Other i,su,List.filter hinted (List.map #1 ith))
-           in
-             withFewerTurns (withHands
-               (withHints (withLogCons s newLog) (#hints s - 1))
-               (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next))
-           end
-       | HintRank (i,r) =>
-           let
-             val (prev,ith::next) = Util.splitAt (#hands s, i+1)
-             fun info (su,r') = if r = r' then IsRank r else NotRank r
-             val newLog = HintedRank (Other i,r,
-               List.filter (fn (su,r') => r = r') (List.map #1 ith))
-           in
-             withFewerTurns (withHands
-               (withHints (withLogCons s newLog) (#hints s - 1))
-               (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next))
-           end
+    increaseTurnNumber (
+      case a of
+           Discard i =>
+             let
+               val (((su,r),_),cs) = Util.splitNth (hd (#hands s), i)
+             in
+               withInDiscard
+                 (drawCard (withCurHand (withLogCons
+                   (withHints s (#hints s + 1)) (Discarded (su,r))) cs))
+                 (SD.insert (#inDiscard s) su (r :: SD.lookup (#inDiscard s) su))
+             end
+         | Play i =>
+             let
+               val (((su,r),_),cs) = Util.splitNth (hd (#hands s), i)
+             in
+               if (SD.lookup (#inPlay s) su) + 1 = r
+               then withInPlay
+                      (drawCard (withCurHand (withLogCons
+                        (withHints s (if r = 5 then (Int.min (#hints s + 1,8)) else #hints s))
+                        (Played (su,r))) cs))
+                      (SD.insert (#inPlay s) su r)
+               else withInDiscard
+                      (drawCard (withCurHand
+                        (withFuses (withLogCons s (Played (su,r))) (#fuses s - 1)) cs))
+                      (SD.insert (#inDiscard s) su (r::SD.lookup (#inDiscard s) su))
+             end
+         | HintSuit (i,su) =>
+             let
+               val (prev,ith::next) = Util.splitAt (#hands s, i+1)
+               fun hinted (su',r) = su = su' orelse su' = Rainbow
+               fun info c = if hinted c then IsSuit su else NotSuit su
+               val newLog = HintedSuit (Other i,su,List.filter hinted (List.map #1 ith))
+             in
+               withFewerTurns (withHands
+                 (withHints (withLogCons s newLog) (#hints s - 1))
+                 (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next))
+             end
+         | HintRank (i,r) =>
+             let
+               val (prev,ith::next) = Util.splitAt (#hands s, i+1)
+               fun info (su,r') = if r = r' then IsRank r else NotRank r
+               val newLog = HintedRank (Other i,r,
+                 List.filter (fn (su,r') => r = r') (List.map #1 ith))
+             in
+               withFewerTurns (withHands
+                 (withHints (withLogCons s newLog) (#hints s - 1))
+                 (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next))
+             end)
 
   (* Returns the first n elements of the game log, adjusting player numbers
    * appropriately. The player only accesses (#log s) through this. *)
@@ -330,6 +340,7 @@ struct
          hands = tl (#hands s),
          log = getLog (#log s) (length ps),
          turns = #turns s,
+         turnNumber = #turnNumber s,
          inPlay = #inPlay s,
          inDiscard = #inDiscard s}
       val s' = if illegalMove (act,s)
@@ -342,7 +353,8 @@ struct
     end
 
   fun printState (s : fstate) = (print
-    ("Hints: " ^ Int.toString (#hints s) ^ " " ^
+    ("Turn " ^ Int.toString (#turnNumber s) ^ ". " ^
+     "Hints: " ^ Int.toString (#hints s) ^ " " ^
      "Fuses: " ^ Int.toString (#fuses s) ^ " " ^
      (case #turns s of
            Deck n => "Deck: " ^ (Int.toString n)
