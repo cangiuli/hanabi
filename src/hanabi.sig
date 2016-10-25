@@ -14,10 +14,12 @@ sig
                 | IsRank of rank
                 | NotRank of rank
   datatype player = Me | Other of int
-  datatype play = Discarded of card
-                | Played of card
-                | HintedSuit of player * suit * card list
-                | HintedRank of player * rank * card list
+  (* Played has arguments: (index of card, card, successfulness (false=bomb),
+   * clues given on that card, whether a hint was received as result of that play) *)
+  datatype play = Discarded of int * card * info list
+                | Played of int * card * bool * info list * bool
+                | HintedSuit of player * suit * int list
+                | HintedRank of player * rank * int list
   datatype turns = Deck of int | Turns of int (* deck size or turns remaining *)
 
   structure SD : DICT where type key = suit

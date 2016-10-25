@@ -126,7 +126,7 @@ struct
 
   (* Is this action a number clue to me which applies to the oldest card
    * about which we previously had no positive information? *)
-  fun isSaveClue (s : state) (_,HintedRank (Me,r,[])) =
+  fun isSaveClue (s : state) ((_,HintedRank (Me,r,cs)) : player * play) =
     (case ourOldestUnclued (map tl (#clues s)) of
           NONE => false
         | SOME i => (case hd (List.nth (#clues s,i)) of
@@ -144,8 +144,8 @@ struct
   (* Is the most recent action a play clue to me (and if so, for which card)? *)
   fun receivedPlayHint (s : state) : action option =
     case #log s 1 of
-         (pl,HintedSuit (Me,su,[]))::_ => playNewestJustClued s
-       | (pl,HintedRank (Me,r,[]))::_ => if isSaveClue s (pl,HintedRank (Me,r,[]))
+         (pl,HintedSuit (Me,su,cs))::_ => playNewestJustClued s
+       | (pl,HintedRank (Me,r,cs))::_ => if isSaveClue s (pl,HintedRank (Me,r,cs))
                                          then NONE
                                          else playNewestJustClued s
        | _ => NONE
@@ -154,13 +154,13 @@ struct
   fun updateIsPlayable (s : state) (m' : int list list) : int list list =
   let
     val m : int list list ref = ref m'
-    val cs = #log s (players s)
+    val cs = rev (#log s (players s))
     fun loop (a : player * play) : unit =
     case a of
          (pl',HintedSuit (pl,su,l)) => ()
        | (pl',HintedRank (pl,r,l)) => ()
-       | (pl, Discarded c) => ()
-       | (pl, Played c) => ()
+       | (pl, Discarded (j,(su,r),is)) => ()
+       | (pl, Played (j,(su,r),b,is,rh)) => ()
   in
     map loop cs; !m
   end

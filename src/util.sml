@@ -40,6 +40,17 @@ struct
     loop xs 0
   end
 
+  (* Applies f to each element from left to right, returning the indices where f is true *)
+  fun findIndices (f : 'a -> bool) (xs : 'a list) : int list =
+  let
+    fun loop xs i =
+      case xs of
+           [] => []
+         | x::xs' => if f x then i::loop xs' (i+1) else loop xs' (i+1)
+  in
+    loop xs 0
+  end
+
   (* revFindIndex f xs = findIndex f (rev xs) *)
   fun revFindIndex (f : 'a -> bool) (xs : 'a list) : int option =
     if null xs then NONE else
@@ -56,6 +67,20 @@ struct
     case opt of
          SOME v => v
        | NONE => f ()
+
+  (* maps f to the nth element in l. Returns l if n >= len l *)
+  fun mapAt (f : 'a -> 'a) (l : 'a list) (n : int) : 'a list =
+    case (l,n) of
+         ([],_) => []
+       | (h::t,0) => f h::t
+       | (h::t,n) => h::mapAt f t (n-1)
+
+  (* inserts x before the nth element. Appends x if n >= len l *)
+  fun insert (x : 'a) (l : 'a list) (n : int) : 'a list =
+    case (l,n) of
+         (l,0) => l
+       | ([],_) => [x]
+       | (h::t,n) => h::insert x t (n-1)
 
   (* Returns true iff x is in l. *)
   fun elem (l : ''a list) (x : ''a) : bool =

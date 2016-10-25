@@ -14,10 +14,12 @@ struct
                 | IsRank of rank
                 | NotRank of rank
   datatype player = Me | Other of int
-  datatype play = Discarded of card
-                | Played of card
-                | HintedSuit of player * suit * card list
-                | HintedRank of player * rank * card list
+  (* Played has arguments: (index of card, card, successfulness (false=bomb),
+   * clues given on that card, whether a hint was received as result of that play) *)
+  datatype play = Discarded of int * card * info list
+                | Played of int * card * bool * info list * bool
+                | HintedSuit of player * suit * int list
+                | HintedRank of player * rank * int list
   datatype turns = Deck of int | Turns of int (* deck size or turns remaining *)
 
   val ranks = [1,1,1,2,2,3,3,4,4,5]
@@ -120,6 +122,7 @@ struct
   fun cardToString (su,r) = Ansi.colorStr (Int.toString r) (suitColor su)
 
   fun cardsToString (cs : card list) = String.concatWith " " (map cardToString cs)
+  fun intsToString (is : int list) = String.concatWith " " (map Int.toString is)
 
   fun suitToString su = case su of
                             White => "white"
@@ -145,12 +148,13 @@ struct
           Me => "I"
         | Other i => "p" ^ Int.toString i) ^
     (case play of
-          Discarded c => " discarded " ^ cardToString c
-        | Played c => " played " ^ cardToString c
+          Discarded (j,c,is) => " discarded card " ^ Int.toString j ^ " (" ^ cardToString c ^ ")"
+        | Played (j,c,b,is,rh) => " " ^ (if b then "played" else "bombed") ^ " card " ^
+            Int.toString j ^ " (" ^ cardToString c ^ ")" ^ (if rh then " (+1 hint)" else "")
         | HintedSuit (p,su,cs) => " hinted " ^ suitToString su ^
-            " (" ^ cardsToString cs ^ ") to " ^ playerToString p
+            " (" ^ intsToString cs ^ ") to " ^ playerToString p
         | HintedRank (p,r,cs) => " hinted " ^ Int.toString r ^
-            " (" ^ cardsToString cs ^ ") to " ^ playerToString p)
+            " (" ^ intsToString cs ^ ") to " ^ playerToString p)
 
   fun actionToString (a : action) =
     case a of
@@ -253,45 +257,46 @@ struct
       case a of
            Discard i =>
              let
-               val (((su,r),_),cs) = Util.splitNth (hd (#hands s), i)
+               val (((su,r),is),cs) = Util.splitNth (hd (#hands s), i)
              in
                withInDiscard
                  (drawCard (withCurHand (withLogCons
-                   (withHints s (#hints s + 1)) (Discarded (su,r))) cs))
+                   (withHints s (#hints s + 1)) (Discarded (i,(su,r),is))) cs))
                  (SD.insert (#inDiscard s) su (r :: SD.lookup (#inDiscard s) su))
              end
          | Play i =>
              let
-               val (((su,r),_),cs) = Util.splitNth (hd (#hands s), i)
+               val (((su,r),is),cs) = Util.splitNth (hd (#hands s), i)
+               val receivedHint = r = 5 andalso #hints s < 8
              in
                if (SD.lookup (#inPlay s) su) + 1 = r
                then withInPlay
                       (drawCard (withCurHand (withLogCons
-                        (withHints s (if r = 5 then (Int.min (#hints s + 1,8)) else #hints s))
-                        (Played (su,r))) cs))
+                        (withHints s (if receivedHint then #hints s + 1 else #hints s))
+                        (Played (i,(su,r),true,is,receivedHint))) cs))
                       (SD.insert (#inPlay s) su r)
                else withInDiscard
-                      (drawCard (withCurHand
-                        (withFuses (withLogCons s (Played (su,r))) (#fuses s - 1)) cs))
+                      (drawCard (withCurHand (withFuses (withLogCons s
+                        (Played (i,(su,r),false,is,false))) (#fuses s - 1)) cs))
                       (SD.insert (#inDiscard s) su (r::SD.lookup (#inDiscard s) su))
              end
          | HintSuit (i,su) =>
              let
                val (prev,ith::next) = Util.splitAt (#hands s, i+1)
-               fun hinted (su',r) = su = su' orelse su' = Rainbow
-               fun info c = if hinted c then IsSuit su else NotSuit su
-               val newLog = HintedSuit (Other i,su,List.filter hinted (List.map #1 ith))
+               fun hinted ((su',_),_) = su = su' orelse su' = Rainbow
+               fun info cis = if hinted cis then IsSuit su else NotSuit su
+               val newLog = HintedSuit (Other i,su,Util.findIndices hinted ith)
              in
                withFewerTurns (withHands
                  (withHints (withLogCons s newLog) (#hints s - 1))
-                 (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next))
+                 (prev @ [map (fn (c,is) => (c, info (c, is) :: is)) ith] @ next))
              end
          | HintRank (i,r) =>
              let
                val (prev,ith::next) = Util.splitAt (#hands s, i+1)
                fun info (su,r') = if r = r' then IsRank r else NotRank r
                val newLog = HintedRank (Other i,r,
-                 List.filter (fn (su,r') => r = r') (List.map #1 ith))
+                 Util.findIndices (fn ((_,r'),_) => r = r') ith)
              in
                withFewerTurns (withHands
                  (withHints (withLogCons s newLog) (#hints s - 1))
@@ -305,16 +310,10 @@ struct
       fun who i = if i mod players = 0 then Me else Other (~i mod players - 1)
       fun rotate p i =
         case p of
-             Discarded c => (who i, Discarded c)
-           | Played c => (who i, Played c)
-           | HintedSuit (Other pl,su,cs) =>
-               (case who (i-pl-1) of
-                     Me => (who i, HintedSuit (Me,su,[]))
-                   | Other j => (who i, HintedSuit (Other j,su,cs)))
-           | HintedRank (Other pl,r,cs) =>
-               (case who (i-pl-1) of
-                     Me => (who i, HintedRank (Me,r,[]))
-                   | Other j => (who i, HintedRank (Other j,r,cs)))
+             Discarded x => (who i, Discarded x)
+           | Played x => (who i, Played x)
+           | HintedSuit (Other pl,su,cs) => (who i, HintedSuit (who (i-pl-1),su,cs))
+           | HintedRank (Other pl,r,cs) => (who i, HintedRank (who (i-pl-1),r,cs))
            | _ => raise Fail "Impossible log."
       fun loop xs i = if i > n then [] else
         case xs of
