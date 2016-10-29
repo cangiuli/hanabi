@@ -78,7 +78,7 @@ struct
   (* inserts x before the nth element. Appends x if n >= len l *)
   fun insert (x : 'a) (l : 'a list) (n : int) : 'a list =
     case (l,n) of
-         (l,0) => l
+         (l,0) => x::l
        | ([],_) => [x]
        | (h::t,n) => h::insert x t (n-1)
 
@@ -98,7 +98,8 @@ struct
       end
   in
     case l of
-         [x] => 0 (* no need to call f if the list is a singleton *)
+         [] => raise Empty
+       | [x] => 0 (* no need to call f if the list is a singleton *)
        | x::xs => loop xs (f x) 0 1
   end
 
@@ -114,7 +115,8 @@ struct
       end
   in
     case l of
-         [x] => 0 (* no need to call f if the list is a singleton *)
+         [] => raise Empty
+       | [x] => 0 (* no need to call f if the list is a singleton *)
        | x::xs => loop xs (f x) 0 1
   end
 
@@ -140,7 +142,8 @@ struct
       end
   in
     case l of
-       x::xs => loop xs (f x)
+         [] => raise Empty
+       | x::xs => loop xs (f x)
   end
 
   (* similar to findMax *)
@@ -153,7 +156,8 @@ struct
       end
   in
     case l of
-       x::xs => loop xs (f x)
+         [] => raise Empty
+       | x::xs => loop xs (f x)
   end
 
 end

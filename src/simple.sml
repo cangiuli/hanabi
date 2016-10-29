@@ -234,11 +234,11 @@ struct
   fun initializeMemory (m : memory ref) (s : state) : unit =
     if #turnNumber s <= players s then m := initialMemory s else ()
 
-  val play : unit -> state -> action =
+  fun play (u : unit) : state -> action =
   let
     val m : memory ref = ref emptyMemory
   in
-    fn u => fn s => (
+    fn s => (
     initializeMemory m s;
     m := withIsPlayable (!m) (updateIsPlayable s (#isPlayable (!m)));
     receivedPlayHint s otherwise (fn () =>

@@ -327,12 +327,12 @@ struct
    * Calls trace after each move, and returns final game state.
    * Requires length (#hands s) = length ps. *)
   fun gameLoop (s : fstate)
-               (ps : (unit -> state -> action) list)
+               (ps : (state -> action) list)
                (trace : action * fstate -> unit)
                : fstate =
     let
       fun rotate xs = (tl xs) @ [hd xs]
-      val act = hd ps ()
+      val act = hd ps
         {hints = #hints s,
          fuses = #fuses s,
          clues = map #2 (hd (#hands s)),
@@ -373,9 +373,10 @@ struct
     val s = if length ps < 2 orelse length ps > 5
             then raise Fail "Invalid number of players."
             else newGameState (length ps)
+    val ps' = map (fn p => p ()) ps
     fun trace (a,s) = (print (actionToString a ^ "\n"); printState s; print "\n")
   in
-    printState s; print "\n"; score (gameLoop s ps trace)
+    printState s; print "\n"; score (gameLoop s ps' trace)
   end
 
   (* Play n games of Hanabi between players ps, silently. *)
@@ -384,7 +385,8 @@ struct
     val num = if length ps < 2 orelse length ps > 5
               then raise Fail "Invalid number of players."
               else length ps
-    fun play _ = score (gameLoop (newGameState num) ps (fn _ => ()))
+    val ps' = map (fn p => p ()) ps
+    fun play _ = score (gameLoop (newGameState num) ps' (fn _ => ()))
   in
     List.tabulate (n, play)
   end
