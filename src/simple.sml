@@ -4,27 +4,25 @@ struct
   open UtilHanabi
 
   (* The memory of a player.
-     isPlayable gives the list of playable card indices for each player *)
-  type memory = {isPlayable : int list list,
+     playable gives the set of playable card indices for each player *)
+  type memory = {playable : RSet.set list,
                  test : int}
 
-  val emptyMemory : memory = {isPlayable = [], test = 0}
+  val emptyMemory : memory = {playable = [], test = 0}
   fun initialMemory (s : state) : memory =
-    {isPlayable = List.tabulate (players s, fn _ => []), test = 0}
+    {playable = List.tabulate (players s, fn _ => RSet.empty), test = 0}
 
   fun memoryToString (m : memory) =
-    String.concatWith " " (map (fn is => "[" ^ String.concatWith ", " (map Int.toString is) ^ "]")
-                               (#isPlayable m))
+    String.concatWith " " (map
+      (fn is => "[" ^ String.concatWith ", " (map Int.toString (RSet.toList is)) ^ "]")
+      (#playable m))
 
-  fun withIsPlayable (m : memory) isPlayable' : memory =
-    {isPlayable = isPlayable', test = #test m}
+  fun withPlayable (m : memory) playable' : memory =
+    {playable = playable', test = #test m}
 
-  (* Drawn cards are added to the front of the hand. *)
-  fun oldestUnclued (xs : ('a * info list) list) : 'a option =
-    Option.map #1 (Util.revFind (fn (_,is) => not (isClued is)) xs)
-
-  (* Returns index of oldest unclued card in our own hand. *)
-  fun ourOldestUnclued (xs : info list list) : int option =
+  (* Returns index of oldest unclued card in xs.
+   * Drawn cards are added to the front of the hand. *)
+  fun oldestUnclued (xs : info list list) : int option =
     Util.revFindIndex (not o isClued) xs
 
   (* Returns index of newest just-clued card in our own hand. *)
@@ -34,6 +32,14 @@ struct
                                 | (IsRank _)::_ => true
                                 | _ => false)
                    (#clues s)
+
+  (* Returns index of newest just-clued card in the hand of player pl. *)
+  fun newestJustClued (s : state) (pl : player) : int option =
+    Util.findIndex (fn is => case is of
+                                  (IsSuit _)::_ => true
+                                | (IsRank _)::_ => true
+                                | _ => false)
+                   (clues s pl)
 
   (* Returns the newest card matching the given hint. *)
   fun newestMatching (s : state) (a : action) : card option =
@@ -126,13 +132,19 @@ struct
 
   (* Is this action a number clue to me which applies to the oldest card
    * about which we previously had no positive information? *)
-  fun isSaveClue (s : state) ((_,HintedRank (Me,r,cs)) : player * play) =
-    (case ourOldestUnclued (map tl (#clues s)) of
+  fun isSaveClueToMe (s : state) ((_,HintedRank (Me,r,cs)) : player * play) =
+    (case oldestUnclued (map tl (#clues s)) of
           NONE => false
         | SOME i => (case hd (List.nth (#clues s,i)) of
                           IsRank _ => true
                         | _ => false))
-    | isSaveClue s _ = false
+    | isSaveClueToMe s _ = false
+
+  (* Is a rank hint which hints the cards in positions l interpreted as a save hint? *)
+  fun isSaveClue (s : state) (pl : player) (l : int list) : bool =
+    case oldestUnclued (clues s pl) of
+         NONE => false
+       | SOME i => Util.elem l i
 
   (* If the newest card which is just clued is playable, play it *)
   fun playNewestJustClued (s : state) : action option =
@@ -145,24 +157,32 @@ struct
   fun receivedPlayHint (s : state) : action option =
     case #log s 1 of
          (pl,HintedSuit (Me,su,cs))::_ => playNewestJustClued s
-       | (pl,HintedRank (Me,r,cs))::_ => if isSaveClue s (pl,HintedRank (Me,r,cs))
+       | (pl,HintedRank (Me,r,cs))::_ => if isSaveClueToMe s (pl,HintedRank (Me,r,cs))
                                          then NONE
                                          else playNewestJustClued s
        | _ => NONE
 
   (* update the list of playable cards in all hands (WIP) *)
-  fun updateIsPlayable (s : state) (m' : int list list) : int list list =
+  fun updateIsPlayable (s : state) (m' : RSet.set list) : RSet.set list =
   let
-    val m : int list list ref = ref m'
-    val cs = rev (#log s (players s))
-    fun loop (a : player * play) : unit =
+    val m : RSet.set list ref = ref m'
+    val cs = #log s (players s)
+    val ss = getPrevStates s cs
+    fun loop ((s', a) : state * (player * play)) : unit =
     case a of
-         (pl',HintedSuit (pl,su,l)) => ()
-       | (pl',HintedRank (pl,r,l)) => ()
-       | (pl, Discarded (j,(su,r),is)) => ()
-       | (pl, Played (j,(su,r),b,is,rh)) => ()
+         (pl',HintedSuit (pl,su,l)) => if null l then () else
+         m := Util.mapAt (fn js => RSet.insert js (Util.findMin (fn x => x) l)) (!m) (playerToInt pl)
+       | (pl',HintedRank (pl,r,l)) => if null l orelse isSaveClue s' pl l then () else
+         m := Util.mapAt (fn js => RSet.insert js (Util.findMin (fn x => x) l)) (!m) (playerToInt pl)
+       | (pl, Discarded (j,(su,r),is)) =>
+         m := Util.mapAt (fn js => removeCardIndexed s' js j) (!m) (playerToInt pl)
+       | (pl, Played (j,(su,r),_,is,_)) =>
+         m := Util.mapAt (fn js => removeCardIndexed s' js j) (!m) (playerToInt pl)
   in
-    map loop cs; !m
+    app loop (rev (ListPair.zipEq (ss, cs)));
+    (* TODO: add every certainly playable card and remove every certainly nonplayable card,
+             or maybe we need to do this in "loop" *)
+    !m
   end
 
   (* Does the next player have a hintable, playable card (and if so, how)? *)
@@ -174,10 +194,13 @@ struct
 
   (* Is the next player's oldest unclued card vital (if so, save it)? *)
   fun giveSaveHint (s : state) : action option =
-    case oldestUnclued (hd (#hands s)) of
-         SOME (su,r) => if isVital s (su,r) andalso #hints s > 0
+    case oldestUnclued (clues s (Other 0)) of
+         SOME i => let val ((su,r),_) = List.nth (hd (#hands s), i)
+                   in
+                        if isVital s (su,r) andalso #hints s > 0
                         then SOME (HintRank (0,r))
                         else NONE
+                   end
        | NONE => NONE
 
   (* Discard useless card in our hand (if possible). *)
@@ -190,7 +213,7 @@ struct
   fun discardOldestUnclued (s : state) : action option =
     if #hints s = 8
     then NONE
-    else Option.map Discard (ourOldestUnclued (#clues s))
+    else Option.map Discard (oldestUnclued (#clues s))
 
   (* Try to give a hint pointing at 0 cards.
    * Currently it will only try to give rank hints to the next player, but this can be extended *)
@@ -240,7 +263,7 @@ struct
   in
     fn s => (
     initializeMemory m s;
-    m := withIsPlayable (!m) (updateIsPlayable s (#isPlayable (!m)));
+    m := withPlayable (!m) (updateIsPlayable s (#playable (!m)));
     receivedPlayHint s otherwise (fn () =>
     givePlayHint s otherwise (fn () =>
     giveSaveHint s otherwise (fn () =>
