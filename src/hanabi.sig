@@ -35,8 +35,8 @@ sig
                 inPlay : rank SD.dict,
                 inDiscard : rank list SD.dict}
 
-  val newGame : (unit -> state -> action) list -> int
-  val newGames : int -> (unit -> state -> action) list -> int list
-  val newGamesAllPlayers : int -> (unit -> state -> action) -> unit
+  val newGame : (int -> state -> action) list -> int
+  val newGames : int -> (int -> state -> action) list -> int list
+  val newGamesAllPlayers : int -> (int -> state -> action) -> unit
 
 end

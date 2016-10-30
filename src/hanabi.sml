@@ -368,31 +368,32 @@ struct
      "Hands:\n" ^ (String.concatWith "\n\n" (map handToString (#hands s))) ^ "\n"))
 
   (* Play a game of Hanabi between players ps. *)
-  fun newGame (ps : (unit -> state -> action) list) : int =
+  fun newGame (ps : (int -> state -> action) list) : int =
   let
-    val s = if length ps < 2 orelse length ps > 5
+    val num = length ps
+    val s = if num < 2 orelse num > 5
             then raise Fail "Invalid number of players."
-            else newGameState (length ps)
-    val ps' = map (fn p => p ()) ps
+            else newGameState num
+    val ps' = map (fn p => p num) ps
     fun trace (a,s) = (print (actionToString a ^ "\n"); printState s; print "\n")
   in
     printState s; print "\n"; score (gameLoop s ps' trace)
   end
 
   (* Play n games of Hanabi between players ps, silently. *)
-  fun newGames (n : int) (ps : (unit -> state -> action) list) : int list =
+  fun newGames (n : int) (ps : (int -> state -> action) list) : int list =
   let
-    val num = if length ps < 2 orelse length ps > 5
+    val num = length ps
+    val _ = if num < 2 orelse num > 5
               then raise Fail "Invalid number of players."
-              else length ps
-    val ps' = map (fn p => p ()) ps
-    fun play _ = score (gameLoop (newGameState num) ps' (fn _ => ()))
+              else ()
+    fun play _ = score (gameLoop (newGameState num) (map (fn p => p num) ps) (fn _ => ()))
   in
     List.tabulate (n, play)
   end
 
   (* Play ngames games of Hanabi with 2, 3, 4, and 5 players with strategy pl. *)
-  fun newGamesAllPlayers (ngames : int) (pl : unit -> state -> action) : unit =
+  fun newGamesAllPlayers (ngames : int) (pl : int -> state -> action) : unit =
   if ngames <= 0 then () else
   (print ("Average score +/- 2 * standard error (range) over " ^
           Int.toString ngames ^ " games:\n");

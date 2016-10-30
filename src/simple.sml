@@ -8,9 +8,8 @@ struct
   type memory = {playable : RSet.set list,
                  test : int}
 
-  val emptyMemory : memory = {playable = [], test = 0}
-  fun initialMemory (s : state) : memory =
-    {playable = List.tabulate (players s, fn _ => RSet.empty), test = 0}
+  fun initialMemory (num : int) : memory =
+    {playable = List.tabulate (num, fn _ => RSet.empty), test = 0}
 
   fun memoryToString (m : memory) =
     String.concatWith " " (map
@@ -19,6 +18,9 @@ struct
 
   fun withPlayable (m : memory) playable' : memory =
     {playable = playable', test = #test m}
+
+  fun withTest (m : memory) test' : memory =
+    {playable = #playable m, test = test'}
 
   (* Returns index of oldest unclued card in xs.
    * Drawn cards are added to the front of the hand. *)
@@ -254,15 +256,11 @@ struct
                      otherwise (fn () =>
           Discard (Util.revFindMaxIndex (valOf o cluedRank) (#clues s)))))
 
-  fun initializeMemory (m : memory ref) (s : state) : unit =
-    if #turnNumber s <= players s then m := initialMemory s else ()
-
-  fun play (u : unit) : state -> action =
+  fun play (num : int) : state -> action =
   let
-    val m : memory ref = ref emptyMemory
+    val m : memory ref = ref (initialMemory num)
   in
     fn s => (
-    initializeMemory m s;
     m := withPlayable (!m) (updateIsPlayable s (#playable (!m)));
     receivedPlayHint s otherwise (fn () =>
     givePlayHint s otherwise (fn () =>
