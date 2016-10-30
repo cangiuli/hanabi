@@ -64,6 +64,9 @@ struct
   fun playerToInt (pl : player) : int =
     case pl of Me => 0 | Other i => i + 1
 
+  fun intToPlayer (j : int) : player =
+  if j = 0 then Me else Other (j-1)
+
   (* previous turn if the last action involved a play/discard *)
   fun prevTurnDraw (numberofplayers : int) (t : turns) : turns =
     case t of

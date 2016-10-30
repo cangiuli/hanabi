@@ -102,6 +102,15 @@ struct
     List.all (fn su => not (RSet.member rs (SD.lookup (#inPlay s) su + 1))) sus
   end
 
+  (* Returns whether a card is definitely playable *)
+  fun isDefinitelyPlayable (s : state) (is : info list) : bool =
+  let
+    val sus = SSet.toList (possibleSuits is)
+    val rs = RSet.toList (possibleRanks is)
+  in
+    length rs = 1 andalso List.all (fn su => hd rs = SD.lookup (#inPlay s) su + 1) sus
+  end
+
   (* check whether a card in your own hand is definitely not vital *)
   fun isNotVital (s : state) (is : info list) : bool =
   let
@@ -165,12 +174,14 @@ struct
        | _ => NONE
 
   (* update the list of playable cards in all hands (WIP) *)
-  fun updateIsPlayable (s : state) (m' : RSet.set list) : RSet.set list =
+  fun updatePlayable (s : state) (m' : RSet.set list) : RSet.set list =
   let
     val m : RSet.set list ref = ref m'
-    val cs = #log s (players s)
+    val num = players s
+    val cs = #log s num
     val ss = getPrevStates s cs
-    fun loop ((s', a) : state * (player * play)) : unit =
+    (* adds cards which received play clue to list of playable cards *)
+    fun updateAfterAction ((s', a) : state * (player * play)) : unit =
     case a of
          (pl',HintedSuit (pl,su,l)) => if null l then () else
          m := Util.mapAt (fn js => RSet.insert js (Util.findMin (fn x => x) l)) (!m) (playerToInt pl)
@@ -180,10 +191,21 @@ struct
          m := Util.mapAt (fn js => removeCardIndexed s' js j) (!m) (playerToInt pl)
        | (pl, Played (j,(su,r),_,is,_)) =>
          m := Util.mapAt (fn js => removeCardIndexed s' js j) (!m) (playerToInt pl)
+    (* add every certainly playable card and remove every certainly nonplayable card *)
+    fun finalize (n : int) : unit =
+    let
+      val cluesn = clues s (intToPlayer n)
+      val mn : RSet.set ref = ref (List.nth (!m,n))
+      fun checkCard ((j,is) : int * info list) : unit =
+        if isDefinitelyPlayable s is then mn := RSet.insert (!mn) j else
+        if isNotPlayable s is then mn := RSet.remove (!mn) j else ()
+    in
+      app checkCard (ListPair.zipEq (List.tabulate (length cluesn, fn j => j), cluesn));
+      m := Util.mapAt (fn _ => !mn) (!m) n
+    end
   in
-    app loop (rev (ListPair.zipEq (ss, cs)));
-    (* TODO: add every certainly playable card and remove every certainly nonplayable card,
-             or maybe we need to do this in "loop" *)
+    app updateAfterAction (rev (ListPair.zipEq (ss, cs)));
+    app finalize (List.tabulate (num, fn i => i));
     !m
   end
 
@@ -261,7 +283,7 @@ struct
     val m : memory ref = ref (initialMemory num)
   in
     fn s => (
-    m := withPlayable (!m) (updateIsPlayable s (#playable (!m)));
+    m := withPlayable (!m) (updatePlayable s (#playable (!m)));
     receivedPlayHint s otherwise (fn () =>
     givePlayHint s otherwise (fn () =>
     giveSaveHint s otherwise (fn () =>
