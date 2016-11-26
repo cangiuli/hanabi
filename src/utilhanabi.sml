@@ -49,6 +49,9 @@ struct
        Me => #clues s
      | Other i => map #2 (List.nth (#hands s, i))
 
+  fun all_clues (s : state) : info list list list =
+    #clues s :: map (map #2) (#hands s)
+
   fun lastRound (s : state) : (player * play) list = #log s (players s)
 
   fun isPlayable (s : state) ((su,r) : card) = r = (SD.lookup (#inPlay s) su) + 1
@@ -79,24 +82,15 @@ struct
          Deck n => Deck n
        | Turns n => if n = numberofplayers then Deck 1 else Turns (n+1)
 
-  (* If l is a list of indexes of cards of a player's hand, give the new list after the card in
-   * position x is played/discarded from the hand *)
-  fun removeCardIndexed (s : state) (l : RSet.set) (x : int) : RSet.set =
+  (* If l is a list of information about cards in a players hand, this updates the list after a
+   * card has been played/discarded from the hand *)
+  fun removeCard (s : state) (l : 'a list) (x : int) (default : 'a) : 'a list =
   let
-    val l2 = RSet.toList (RSet.remove l x)
-    fun loopDeck (is : int list) =
-      case is of
-           [] => []
-         | h::t => (if h < x then h+1 else h)::loopDeck t
-    fun loopTurns (is : int list) =
-      case is of
-           [] => []
-         | h::t => (if h < x then h else h-1)::loopTurns t
-    val l3 = case #turns s of
-                  Deck _ => loopDeck l2
-                | Turns _ => loopTurns l2
+    val l2 : 'a list = #2 (Util.splitNth (l, x))
   in
-    foldl (fn (x,s) => RSet.insert s x) RSet.empty l3
+    case #turns s of
+         Deck _ => default::l2
+       | Turns _ => l2
   end
 
   (* Returns the state of the previous turn when the last action was a.
