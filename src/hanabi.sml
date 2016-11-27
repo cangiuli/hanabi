@@ -15,7 +15,8 @@ struct
                 | NotRank of rank
   datatype player = Me | Other of int
   (* Played has arguments: (index of card, card, successfulness (false=bomb),
-   * clues given on that card, whether a hint was received as result of that play) *)
+   * clues given on that card, whether a hint was received as result of that play).
+   * The arguments int list are the positions of the marked cards (in ascending order) *)
   datatype play = Discarded of int * card * info list
                 | Played of int * card * bool * info list * bool
                 | HintedSuit of player * suit * int list
@@ -346,7 +347,7 @@ struct
                then raise Fail ("Illegal action: " ^ actionToString act ^ "\n")
                else enact (act,s)
     in
-      if (trace (act,s'); gameOver s')
+      if (trace (act,s); gameOver s')
       then s'
       else gameLoop (withHands s' (rotate (#hands s'))) (rotate ps) trace
     end
@@ -375,9 +376,9 @@ struct
             then raise Fail "Invalid number of players."
             else newGameState num
     val ps' = map (fn p => p num) ps
-    fun trace (a,s) = (print (actionToString a ^ "\n"); printState s; print "\n")
+    fun trace (a,s) = (printState s; print (actionToString a ^ "\n"); print "\n")
   in
-    printState s; print "\n"; score (gameLoop s ps' trace)
+    score (gameLoop s ps' trace)
   end
 
   (* Play n games of Hanabi between players ps, silently. *)

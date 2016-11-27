@@ -3,31 +3,6 @@ struct
 
   open UtilHanabi
 
-  (* The memory of a player.
-     playable gives the set of playable card indices for each player *)
-  type memory = {playable : bool list list,
-                 test : int}
-
-  fun initialMemory (num : int) : memory =
-  let
-      val k = if num = 2 orelse num = 3 then 5 else 4
-  in
-    {playable = List.tabulate (num, fn _ => List.tabulate (k, fn _ => false)), test = 0}
-  end
-
-  fun boolToString (b : bool) = case b of true => "Y" | false => "N"
-  fun boolsToString (bs : bool list) =
-    String.concatWith "" (map boolToString bs)
-  fun memoryToString (m : memory) =
-    String.concatWith " "
-      (map (fn bs => String.concatWith "" (map boolToString bs)) (#playable m))
-
-  fun withPlayable (m : memory) playable' : memory =
-    {playable = playable', test = #test m}
-
-  fun withTest (m : memory) test' : memory =
-    {playable = #playable m, test = test'}
-
   (* Returns index of oldest unclued card in xs.
    * Drawn cards are added to the front of the hand. *)
   fun oldestUnclued (xs : info list list) : int option =
@@ -108,36 +83,6 @@ struct
     List.all (fn su => not (RSet.member rs (SD.lookup (#inPlay s) su + 1))) sus
   end
 
-  (* Returns whether a card is definitely playable *)
-  fun isDefinitelyPlayable (s : state) (is : info list) : bool =
-  let
-    val sus = SSet.toList (possibleSuits is)
-    val rs = RSet.toList (possibleRanks is)
-  in
-    length rs = 1 andalso List.all (fn su => hd rs = SD.lookup (#inPlay s) su + 1) sus
-  end
-
-  datatype fuzzyBool = True | False | Maybe
-
-  fun isPlayableFuzzy (s : state) (is : info list) : fuzzyBool =
-  let
-    val sus = SSet.toList (possibleSuits is)
-    val rs = possibleRanks is
-    val rs' = RSet.toList rs
-  in
-    if length rs' = 1 andalso List.all (fn su => hd rs' = SD.lookup (#inPlay s) su + 1) sus
-    then True
-    else if List.all (fn su => not (RSet.member rs (SD.lookup (#inPlay s) su + 1))) sus
-    then False
-    else Maybe
-  end
-
-  fun FuzzyBoolToBool (k : fuzzyBool) (default : bool) : bool =
-  case k of
-       True => true
-     | False => false
-     | Maybe => default
-
   (* check whether a card in your own hand is definitely not vital *)
   fun isNotVital (s : state) (is : info list) : bool =
   let
@@ -178,12 +123,6 @@ struct
                         | _ => false))
     | isSaveClueToMe s _ = false
 
-  (* Is a rank hint which hints the cards in positions l interpreted as a save hint? *)
-  fun isSaveClue (s : state) (pl : player) (l : int list) : bool =
-    case oldestUnclued (clues s pl) of
-         NONE => false
-       | SOME i => Util.elem l i
-
   (* If the newest card which is just clued is playable, play it *)
   fun playNewestJustClued (s : state) : action option =
     Option.mapPartial (fn i => if isNotPlayable s (List.nth (#clues s, i))
@@ -199,37 +138,6 @@ struct
                                          then NONE
                                          else playNewestJustClued s
        | _ => NONE
-
-  (* update the list of playable cards in all hands (WIP) *)
-  fun updatePlayable (s : state) (m' : bool list list) : bool list list =
-  let
-    val num = players s
-    val cs = #log s num
-    val ss = getPrevStates s cs
-    (* adds cards which received play clue to list of playable cards *)
-    fun updateAfterAction (((s',a), m) : (state * (player * play)) * bool list list)
-      : bool list list =
-    case a of
-         (pl',HintedSuit (pl,su,l)) => if null l then m else
-         Util.mapAt (fn bs => Util.mapAt (fn _ => true) bs (Util.findMin (fn x => x) l))
-                    m (playerToInt pl)
-       | (pl',HintedRank (pl,r,l)) => if null l orelse isSaveClue s' pl l then m else
-         Util.mapAt (fn bs => Util.mapAt (fn _ => true) bs (Util.findMin (fn x => x) l))
-                    m (playerToInt pl)
-       | (pl, Discarded (j,(su,r),is)) =>
-         Util.mapAt (fn bs => removeCard s' bs j false) m (playerToInt pl)
-       | (pl, Played (j,(su,r),_,is,_)) =>
-         Util.mapAt (fn bs => removeCard s' bs j false) m (playerToInt pl)
-    (* The knowledge of playable cards, without taking into account that the hinted card might be
-       unplayable, and without taking into account that cards other than the first hinted card might
-       now be certainly playable/unplayable *)
-    val m : bool list list = foldr updateAfterAction m' (ListPair.zipEq (ss, cs))
-    (* add every certainly playable card and remove every certainly nonplayable card *)
-    fun finalize_card ((b, is) : bool * info list) : bool =
-    FuzzyBoolToBool (isPlayableFuzzy s is) b
-  in
-    map (map finalize_card o ListPair.zipEq) (ListPair.zipEq (m, all_clues s))
-  end
 
   (* Does the next player have a hintable, playable card (and if so, how)? *)
   fun givePlayHint (s : state) : action option =
@@ -300,12 +208,7 @@ struct
                      otherwise (fn () =>
           Discard (Util.revFindMaxIndex (valOf o cluedRank) (#clues s)))))
 
-  fun play (num : int) : state -> action =
-  let
-    val m : memory ref = ref (initialMemory num)
-  in
-    fn s => (
-    m := withPlayable (!m) (updatePlayable s (#playable (!m)));
+  fun play (num : int) (s : state) : action =
     receivedPlayHint s otherwise (fn () =>
     givePlayHint s otherwise (fn () =>
     giveSaveHint s otherwise (fn () =>
@@ -313,7 +216,6 @@ struct
     discardOldestUnclued s otherwise (fn () =>
     wasteHint s otherwise (fn () =>
     discardAny s otherwise (fn () =>
-    HintRank (0, 1)))))))))
-  end
+    HintRank (0, 1))))))))
 
 end

@@ -6,6 +6,7 @@ Library
   signature PLAYER
   structure UtilHanabi
   structure SimplePlayer
+  structure AdvancedPlayer
 is
   cmlib/cmlib.cm
   src/main.sml
@@ -16,3 +17,4 @@ is
   src/player.sig
   src/utilhanabi.sml
   src/simple.sml
+  src/advanced.sml

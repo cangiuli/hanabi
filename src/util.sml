@@ -86,8 +86,16 @@ struct
   fun elem (l : ''a list) (x : ''a) : bool =
   List.exists (fn y => y = x) l
 
+  (* Maps f to first element which is not mapped to NONE *)
+  fun findPartial (f : 'a -> 'b option) (l : 'a list) : 'b option =
+  case l of
+       [] => NONE
+     | x::xs => case f x of
+                     NONE => findPartial f xs
+                   | SOME y => SOME y
+
   (* find the (smallest) index where f is maximal. Raises an error if l is empty *)
-  fun findMaxIndex (f : 'a -> int) (l : 'a list) =
+  fun findMaxIndex (f : 'a -> int) (l : 'a list) : int =
   let
     fun loop (l' : 'a list) (max : int) (maxInd : int) (currInd : int) =
     case l' of [] => maxInd | x::xs =>
@@ -104,7 +112,7 @@ struct
   end
 
   (* revFindMaxIndex f l = findMaxIndex f (rev l) *)
-  fun revFindMaxIndex (f : 'a -> int) (l : 'a list) =
+  fun revFindMaxIndex (f : 'a -> int) (l : 'a list) : int =
   let
     fun loop (l' : 'a list) (max : int) (maxInd : int) (currInd : int) =
     case l' of [] => maxInd | x::xs =>
@@ -132,32 +140,36 @@ struct
     Math.sqrt (error / real ((n - 1) * n))
   end
 
-  (* find the value in l where f is maximal *)
-  fun findMax (f : 'a -> int) (l : 'a list) =
+  (* find the (first) value in l where f is maximal *)
+  fun findMax (f : 'a -> int) (l : 'a list) : 'a =
   let
-    fun loop (l' : 'a list) (max : int) =
-    case l' of [] => max | x::xs =>
-      let val n = f x in
-        if n > max then loop xs n else loop xs max
-      end
+    fun loop (l' : 'a list) (max : int) (x : 'a) =
+    case l' of
+         [] => x
+       | x'::xs => let val n = f x' in
+                     if n > max then loop xs n x' else loop xs max x
+                   end
   in
     case l of
          [] => raise Empty
-       | x::xs => loop xs (f x)
+       | [x] => x
+       | x::xs => loop xs (f x) x
   end
 
   (* similar to findMax *)
-  fun findMin (f : 'a -> int) (l : 'a list) =
+  fun findMin (f : 'a -> int) (l : 'a list) : 'a =
   let
-    fun loop (l' : 'a list) (min : int) =
-    case l' of [] => min | x::xs =>
-      let val n = f x in
-        if n < min then loop xs n else loop xs min
-      end
+    fun loop (l' : 'a list) (min : int) (x : 'a) =
+    case l' of
+         [] => x
+       | x'::xs => let val n = f x' in
+                     if n < min then loop xs n x' else loop xs min x
+                   end
   in
     case l of
          [] => raise Empty
-       | x::xs => loop xs (f x)
+       | [x] => x
+       | x::xs => loop xs (f x) x
   end
 
 end

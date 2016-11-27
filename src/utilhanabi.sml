@@ -33,6 +33,7 @@ struct
 
   fun rainbowAnd su = SSet.insert (SSet.singleton Rainbow) su
 
+  (* all possible hints to player i. *)
   fun allHints (i : int) : action list =
     map (fn su => HintSuit (i,su)) (SSet.toList suits') @
     map (fn r => HintRank (i,r)) [1,2,3,4,5]
@@ -49,7 +50,7 @@ struct
        Me => #clues s
      | Other i => map #2 (List.nth (#hands s, i))
 
-  fun all_clues (s : state) : info list list list =
+  fun allClues (s : state) : info list list list =
     #clues s :: map (map #2) (#hands s)
 
   fun lastRound (s : state) : (player * play) list = #log s (players s)

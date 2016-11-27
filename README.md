@@ -15,6 +15,14 @@ Average score +/- 2 * standard error over 10000 games:
 * 4 players: 22.717 +/- 0.042.
 * 5 players: 21.841 +/- 0.034.
 
+**Advanced Player**
+
+Average score +/- 2 * standard error over 10000 games:
+* 2 players: 25.214 +/- 0.058.
+* 3 players: 24.859 +/- 0.040.
+* 4 players: 24.216 +/- 0.036.
+* 5 players: 22.822 +/- 0.030.
+
 # Installation
 
 We recommend `rlwrap` to run the code. To install the required packages on Linux, execute
