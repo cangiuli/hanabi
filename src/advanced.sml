@@ -46,8 +46,25 @@ struct
                                 | _ => false)
                    (clues s pl)
 
-  (* Returns the newest card matching the given hint.
-   * ----- Returns NONE if the hint can be interpreted as a save hint ------ *)
+  (* Returns all cards matching the given hint. *)
+  fun allMatching (s : state) (a : action) : card list =
+    case a of
+         HintSuit (i,su') =>
+           List.map #1 (List.filter (fn ((su,_),_) => su = Rainbow orelse su = su')
+                                    (List.nth (#hands s,i)))
+       | HintRank (i,r') =>
+           List.map #1 (List.filter (fn ((_,r),_) => r = r') (List.nth (#hands s,i)))
+       | _ => []
+
+  (* Returns the indices of all cards matching the given hint. *)
+  fun allMatchingIndices (s : state) (a : action) : int list =
+    case a of
+         HintSuit (i,su') => Util.findIndices (fn ((su,_),_) => su = Rainbow orelse su = su')
+                                              (List.nth (#hands s,i))
+       | HintRank (i,r') => Util.findIndices (fn ((_,r),_) => r = r') (List.nth (#hands s,i))
+       | _ => []
+
+  (* Returns the newest card matching the given hint. *)
   fun newestMatching (s : state) (a : action) : card option =
     case a of
          HintSuit (i,su') =>
@@ -170,8 +187,8 @@ struct
   in
     if RSet.member rs 5 then false else
       List.all (fn su => List.all (fn r => isUseless s (su, r) orelse not (isVital s (su, r)))
-				  (RSet.toList rs))
-	       (SSet.toList sus)
+                                  (RSet.toList rs))
+               (SSet.toList sus)
 
   end
 
@@ -191,19 +208,6 @@ struct
    *   Otherwise, discard the least vital card
    *   Otherwise you have 8 clues, and then you clue 1 to the next player.
    *)
-
-  (* Is this action a number clue to me which applies to the oldest card
-   * about which we previously had no positive information?
-   * TODO:
-   * - if no unplayed card of that (non-5) number are discarded then it's not a save
-   * - if the clue pointed at 1 card and it's playable assuming it's not useless, then it's a play*)
-  fun isSaveClueToMe (s : state) ((_,HintedRank (Me,r,cs)) : player * play) =
-    (case oldestUnclued (map tl (#clues s)) of
-          NONE => false
-        | SOME i => (case hd (List.nth (#clues s,i)) of
-                          IsRank _ => true
-                        | _ => false))
-    | isSaveClueToMe s _ = false
 
   (* Is a rank hint which hints the cards in positions l interpreted as a save hint? *)
   fun isSaveClue (s : state) (pl : player) (l : int list) : bool =
@@ -282,7 +286,20 @@ struct
      mark cards which are possibly marked in my hand *)
 
   fun clueValue (s : state) (a : action) : int =
-    0
+  let
+    val cs = allMatching s a
+    val l = [(Util.count (isUseless s) cs) * uselessCluedValue] @
+            [(Util.count (isVital s) cs) * vitalCluedValue] @
+            [(Util.count (isPlayable s) cs) * playableCluedValue] @
+            (case a of
+                  HintSuit (_,_) => []
+                | HintRank (i,_) => if isSaveClue s (Other i) (allMatchingIndices s a)
+                                    then [canBeSaveValue]
+                                    else []
+                | _ => [])
+  in
+    foldr (fn (i, j) => i + j) 0 l
+  end
 
   (*     fun isPlayable (s : state) ((su,r) : card) = r = (SD.lookup (#inPlay s) su) + 1 *)
 
@@ -294,27 +311,21 @@ struct
 
   (* Try to give a play hint to player (Other i).
    * Don't give a clue if someone already has that card marked as playable.
-   * TODO: also don't give it if it's marked in anyone's hand *)
+   * TODO: also don't give it if it's marked in anyone's hand (but not marked as playable) *)
   fun givePlayHint (s : state) (m : memory) (i : int) : action option =
   if #hints s = 0 then NONE
   else let
     val wantToClue : card list =
       List.mapPartial (fn (c, _) => if Util.elem (allUncluedPlayable s m) c then SOME c else NONE)
                       (List.nth (#hands s, i))
-    (* fun potentialClues ((su, r) : card) : action list = *)
-    (*   if su = Rainbow *)
-    (*   then map (fn su => HintSuit (i,su)) (SSet.toList suits') @ [HintRank (i,r)] *)
-    (*   else [HintSuit (i, su), HintRank (i,r)] *)
     val workingClues : action list =
       List.filter (fn a => case newestMatching s a of
                                 NONE => false
                               | SOME c => Util.elem wantToClue c)
                   (allHints i)
-    val clueValues : (action * int) list =
-    map (fn a => (a, clueValue s a)) workingClues
   in
-    if null clueValues then NONE
-    else SOME (#1 (Util.findMax (fn (a, i) => i) clueValues))
+    if null workingClues then NONE
+    else SOME (Util.findMax (clueValue s) workingClues)
   end
 
   fun giveLaterPlayHint (s : state) (m : memory) : action option =
@@ -356,8 +367,8 @@ struct
     if #hints s = 0
     then NONE
     else Option.map (fn i => HintRank (0, i))
-		    (List.find (fn i => not (List.exists (fn x => #2 (#1 x) = i) (hd (#hands s))))
-			       [5,4,3,2,1])
+                    (List.find (fn i => not (List.exists (fn x => #2 (#1 x) = i) (hd (#hands s))))
+                               [5,4,3,2,1])
 
   (* Give a hint which cannot be interpreted as a play hint
    * This will hint 5 if that hint cannot be interpreted as a play hint;
@@ -406,8 +417,8 @@ struct
     Option.map (fn i => giveSaveHint s otherwise (fn () => Play i))
                (Util.findIndex (fn b => b) (hd (#playable (!m)))) otherwise (fn () =>
     givePlayHint s (!m) 0 otherwise (fn () =>
-    giveLaterPlayHint s (!m) otherwise (fn () =>
     giveSaveHint s otherwise (fn () =>
+    giveLaterPlayHint s (!m) otherwise (fn () =>
     discardUseless s otherwise (fn () =>
     discardOldestUnclued s otherwise (fn () =>
     wasteHint s otherwise (fn () =>
