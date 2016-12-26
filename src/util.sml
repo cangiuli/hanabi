@@ -40,6 +40,17 @@ struct
     loop xs 0
   end
 
+  (* Applies f to each element from left to right, returning the indices where f is true *)
+  fun findIndices (f : 'a -> bool) (xs : 'a list) : int list =
+  let
+    fun loop xs i =
+      case xs of
+           [] => []
+         | x::xs' => if f x then i::loop xs' (i+1) else loop xs' (i+1)
+  in
+    loop xs 0
+  end
+
   (* revFindIndex f xs = findIndex f (rev xs) *)
   fun revFindIndex (f : 'a -> bool) (xs : 'a list) : int option =
     if null xs then NONE else
@@ -57,8 +68,108 @@ struct
          SOME v => v
        | NONE => f ()
 
+  (* maps f to the nth element in l. Returns l if n >= len l *)
+  fun mapAt (f : 'a -> 'a) (l : 'a list) (n : int) : 'a list =
+    case (l,n) of
+         ([],_) => []
+       | (h::t,0) => f h::t
+       | (h::t,n) => h::mapAt f t (n-1)
+
+  (* inserts x before the nth element. Appends x if n >= len l *)
+  fun insert (x : 'a) (l : 'a list) (n : int) : 'a list =
+    case (l,n) of
+         (l,0) => x::l
+       | ([],_) => [x]
+       | (h::t,n) => h::insert x t (n-1)
+
   (* Returns true iff x is in l. *)
   fun elem (l : ''a list) (x : ''a) : bool =
   List.exists (fn y => y = x) l
+
+  (* Maps f to first element which is not mapped to NONE *)
+  fun findPartial (f : 'a -> 'b option) (l : 'a list) : 'b option =
+  case l of
+       [] => NONE
+     | x::xs => case f x of
+                     NONE => findPartial f xs
+                   | SOME y => SOME y
+
+  (* find the (smallest) index where f is maximal. Raises an error if l is empty *)
+  fun findMaxIndex (f : 'a -> int) (l : 'a list) : int =
+  let
+    fun loop (l' : 'a list) (max : int) (maxInd : int) (currInd : int) =
+    case l' of [] => maxInd | x::xs =>
+      let val n = f x in
+        if n > max
+        then loop xs n currInd (currInd + 1)
+        else loop xs max maxInd (currInd + 1)
+      end
+  in
+    case l of
+         [] => raise Empty
+       | [x] => 0 (* no need to call f if the list is a singleton *)
+       | x::xs => loop xs (f x) 0 1
+  end
+
+  (* revFindMaxIndex f l = findMaxIndex f (rev l) *)
+  fun revFindMaxIndex (f : 'a -> int) (l : 'a list) : int =
+  let
+    fun loop (l' : 'a list) (max : int) (maxInd : int) (currInd : int) =
+    case l' of [] => maxInd | x::xs =>
+      let val n = f x in
+        if n >= max
+        then loop xs n currInd (currInd + 1)
+        else loop xs max maxInd (currInd + 1)
+      end
+  in
+    case l of
+         [] => raise Empty
+       | [x] => 0 (* no need to call f if the list is a singleton *)
+       | x::xs => loop xs (f x) 0 1
+  end
+
+  fun mean (is : int list) : real =
+    real (foldr (fn (i, j) => i + j) 0 is) / real (length is)
+
+  fun stdDev (is : int list) : real =
+  let
+    val m = mean is
+    val n = length is
+    val error = foldr (fn (i, j) => (real i - m) * (real i - m) + j) 0.0  is
+  in
+    Math.sqrt (error / real ((n - 1) * n))
+  end
+
+  (* find the (first) value in l where f is maximal *)
+  fun findMax (f : 'a -> int) (l : 'a list) : 'a =
+  let
+    fun loop (l' : 'a list) (max : int) (x : 'a) =
+    case l' of
+         [] => x
+       | x'::xs => let val n = f x' in
+                     if n > max then loop xs n x' else loop xs max x
+                   end
+  in
+    case l of
+         [] => raise Empty
+       | [x] => x
+       | x::xs => loop xs (f x) x
+  end
+
+  (* similar to findMax *)
+  fun findMin (f : 'a -> int) (l : 'a list) : 'a =
+  let
+    fun loop (l' : 'a list) (min : int) (x : 'a) =
+    case l' of
+         [] => x
+       | x'::xs => let val n = f x' in
+                     if n < min then loop xs n x' else loop xs min x
+                   end
+  in
+    case l of
+         [] => raise Empty
+       | [x] => x
+       | x::xs => loop xs (f x) x
+  end
 
 end
