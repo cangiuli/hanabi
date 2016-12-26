@@ -31,7 +31,6 @@ sig
                 hands : (card * info list) list list,
                 log : int -> (player * play) list,
                 turns : turns,
-                turnNumber : int,
                 inPlay : rank SD.dict,
                 inDiscard : rank list SD.dict}
 

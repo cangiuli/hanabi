@@ -125,7 +125,6 @@ struct
                     | Other j => Util.mapAt (map (fn (c, is) => (c, tl is))) (#hands s) j,
          log = newLog,
          turns = prevTurnNoDraw n (#turns s),
-         turnNumber = #turnNumber s - 1,
          inPlay = #inPlay s,
          inDiscard = #inDiscard s}
   in
@@ -137,7 +136,6 @@ struct
             hands = prevHands j ((su,r),is),
             log = newLog,
             turns = t,
-            turnNumber = #turnNumber s - 1,
             inPlay = #inPlay s,
             inDiscard = SD.insert (#inDiscard s) su (tl (SD.lookup (#inDiscard s) su))}
 
@@ -148,7 +146,6 @@ struct
             hands = prevHands j ((su,r),is),
             log = newLog,
             turns = t,
-            turnNumber = #turnNumber s - 1,
             inPlay = if b then SD.insert (#inPlay s) su (SD.lookup (#inPlay s) su - 1)
                           else #inPlay s,
             inDiscard = if b then #inDiscard s

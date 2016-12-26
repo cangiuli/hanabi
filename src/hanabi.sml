@@ -51,7 +51,6 @@ struct
                  hands : (card * info list) list list,
                  log : play list,
                  turns : turns,
-                 turnNumber : int,
                  inDeck : card list,
                  inPlay : rank SD.dict,
                  inDiscard : rank list SD.dict}
@@ -64,38 +63,34 @@ struct
                 hands : (card * info list) list list,
                 log : int -> (player * play) list,
                 turns : turns,
-                turnNumber : int,
                 inPlay : rank SD.dict,
                 inDiscard : rank list SD.dict}
 
   (* Boilerplate, printing {{{ *)
   fun withHints (s : fstate) hints' : fstate =
     {hints = hints', fuses = #fuses s, hands = #hands s, log = #log s, turns = #turns s,
-     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+     inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withFuses (s : fstate) fuses' : fstate =
     {hints = #hints s, fuses = fuses', hands = #hands s, log = #log s, turns = #turns s,
-     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+     inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withHands (s : fstate) hands' : fstate =
     {hints = #hints s, fuses = #fuses s, hands = hands', log = #log s, turns = #turns s,
-     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+     inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withLog (s : fstate) log' : fstate =
     {hints = #hints s, fuses = #fuses s, hands = #hands s, log = log', turns = #turns s,
-     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+     inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withTurns (s : fstate) turns' : fstate =
     {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns = turns',
-     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
-  fun withTurnNumber (s : fstate) turnNumber' : fstate =
-    {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns = #turns s,
-     turnNumber = turnNumber', inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
+     inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withInDeck (s : fstate) inDeck' : fstate =
     {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns = #turns s,
-     turnNumber = #turnNumber s, inDeck = inDeck', inPlay = #inPlay s, inDiscard = #inDiscard s}
+     inDeck = inDeck', inPlay = #inPlay s, inDiscard = #inDiscard s}
   fun withInPlay (s : fstate) inPlay' : fstate =
     {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns = #turns s,
-     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = inPlay', inDiscard = #inDiscard s}
+     inDeck = #inDeck s, inPlay = inPlay', inDiscard = #inDiscard s}
   fun withInDiscard (s : fstate) inDiscard' : fstate =
     {hints = #hints s, fuses = #fuses s, hands = #hands s, log = #log s, turns = #turns s,
-     turnNumber = #turnNumber s, inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = inDiscard'}
+     inDeck = #inDeck s, inPlay = #inPlay s, inDiscard = inDiscard'}
 
   fun withLogCons (s : fstate) play : fstate = withLog s (play :: #log s)
 
@@ -108,9 +103,6 @@ struct
     case #turns s of
          Deck _ => s
        | Turns n => withTurns s (Turns (n-1))
-
-  fun increaseTurnNumber (s : fstate) : fstate =
-    withTurnNumber s (#turnNumber s + 1)
 
   fun suitColor su = case su of
                          White => Ansi.bright_white
@@ -215,7 +207,6 @@ struct
      hands = map (map (fn x => (x,[]))) hands,
      log = [],
      turns = Deck (60 - numPlayers * size),
-     turnNumber = 1,
      inDeck = deck,
      inPlay = foldl (fn (su,d) => SD.insert d su 0) SD.empty suits,
      inDiscard = foldl (fn (su,d) => SD.insert d su []) SD.empty suits}
@@ -254,7 +245,6 @@ struct
   (* FIXME do something better than chaining so many update functions *)
   (* Current player advances the game state by an (assumed legal) action. *)
   fun enact (a : action, s : fstate) : fstate =
-    increaseTurnNumber (
       case a of
            Discard i =>
              let
@@ -302,7 +292,7 @@ struct
                withFewerTurns (withHands
                  (withHints (withLogCons s newLog) (#hints s - 1))
                  (prev @ [map (fn (c,is) => (c, info c :: is)) ith] @ next))
-             end)
+             end
 
   (* Returns the first n elements of the game log, adjusting player numbers
    * appropriately. The player only accesses (#log s) through this. *)
@@ -340,7 +330,6 @@ struct
          hands = tl (#hands s),
          log = getLog (#log s) (length ps),
          turns = #turns s,
-         turnNumber = #turnNumber s,
          inPlay = #inPlay s,
          inDiscard = #inDiscard s}
       val s' = if illegalMove (act,s)
@@ -353,8 +342,7 @@ struct
     end
 
   fun printState (s : fstate) = (print
-    ("Turn " ^ Int.toString (#turnNumber s) ^ ". " ^
-     "Hints: " ^ Int.toString (#hints s) ^ " " ^
+    ("Hints: " ^ Int.toString (#hints s) ^ " " ^
      "Fuses: " ^ Int.toString (#fuses s) ^ " " ^
      (case #turns s of
            Deck n => "Deck: " ^ (Int.toString n)
