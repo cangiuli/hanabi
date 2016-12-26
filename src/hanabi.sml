@@ -376,9 +376,9 @@ struct
             then raise Fail "Invalid number of players."
             else newGameState num
     val ps' = map (fn p => p num) ps
-    fun trace (a,s) = (printState s; print (actionToString a ^ "\n"); print "\n")
+    fun trace (a,s) = (printState s; print (actionToString a ^ "\n\n"))
   in
-    score (gameLoop s ps' trace)
+      (fn s => (print "End state:\n"; printState s; print "\n"; score s)) (gameLoop s ps' trace)
   end
 
   (* Play n games of Hanabi between players ps, silently. *)
